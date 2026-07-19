@@ -1,0 +1,43 @@
+{
+  "_meta": {
+    "display-name": "home-lab-mesh (DRAFT - W1 Step5 で psconfig validate にかけて確定すること)"
+  },
+  "archives": {
+    "otel-bridge": {
+      "archiver": "http",
+      "data": {
+        "_url": "http://<mac-ip>:8000/archive",
+        "op": "put"
+      }
+    }
+  },
+  "addresses": {
+    "vm":    { "address": "<vm-ip>" },
+    "raspi": { "address": "<raspi-ip>" }
+  },
+  "groups": {
+    "lan-pair": {
+      "type": "mesh",
+      "addresses": [ { "name": "vm" }, { "name": "raspi" } ]
+    }
+  },
+  "tests": {
+    "lan-twamp": {
+      "type": "latency",
+      "spec": { "source": "{% address[0] %}", "dest": "{% address[1] %}" }
+    }
+  },
+  "schedules": {
+    "every-5min": { "repeat": "PT5M", "sliprand": true, "slip": "PT2M" }
+  },
+  "tasks": {
+    "lan-twamp-task": {
+      "group": "lan-pair",
+      "test": "lan-twamp",
+      "schedule": "every-5min",
+      "tools": [ "twping" ],
+      "archives": [ "otel-bridge" ],
+      "reference": { "path.id": "lan-wired" }
+    }
+  }
+}

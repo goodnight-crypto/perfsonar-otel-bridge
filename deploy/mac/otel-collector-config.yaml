@@ -1,0 +1,19 @@
+# OTel Collector 設定ドラフト (W2 で疎通確認しながら確定)
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+processors:
+  batch: {}
+exporters:
+  otlphttp/splunk:
+    metrics_endpoint: "https://ingest.${env:SPLUNK_REALM}.signalfx.com/v2/datapoint/otlp"
+    headers:
+      X-SF-Token: "${env:SPLUNK_ACCESS_TOKEN}"
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp/splunk]
