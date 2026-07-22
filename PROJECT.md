@@ -35,7 +35,7 @@ Zenn 記事投稿コンテスト「OpenTelemetryの知見を、記事にしよ�
 ## ロードマップ
 
 ### W1（〜7/26）環境構築と疎通
-- [ ] Splunk O11y Free Edition 取得、realm / INGEST トークン確保
+- [x] Splunk O11y Free Edition 取得、realm / INGEST トークン確保
 - [ ] RasPi: 64bit 確認 → Docker → testpoint 起動（設定 volume 永続化）
 - [ ] Mac: Linux VM（ブリッジ接続）構築 → testpoint 起動
 - [ ] twamp / rtt / iperf3 の手動疎通確認（双方向）
