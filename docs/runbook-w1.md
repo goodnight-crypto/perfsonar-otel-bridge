@@ -66,7 +66,8 @@ brew install socket_vmnet
 ```bash
 # VM 内または RasPi 内の testpoint コンテナから実行
 # 3-1. twamp（本命。クロック非依存の RTT + ロス）
-docker exec perfsonar-testpoint pscheduler task twamp --source <vm-ip> --dest <raspi-ip>
+# 注: pScheduler に独立した "twamp" テストは無い。"latency" テストの --protocol オプションで指定する
+docker exec perfsonar-testpoint pscheduler task latency --protocol=twamp --source <vm-ip> --dest <raspi-ip>
 
 # 3-2. rtt（外部ターゲット。片端で完結）
 docker exec perfsonar-testpoint pscheduler task rtt --dest 8091.info

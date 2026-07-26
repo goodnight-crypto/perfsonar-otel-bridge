@@ -31,3 +31,14 @@
 - ハマりポイント⑤: `base: template:ubuntu-lts` は現在 `_images/ubuntu-26.04` を指す（Lima 2.2.0時点）。runbookの方針「Ubuntu 24.04 arm64」の再現性を保つため `template:_images/ubuntu-24.04` を明示指定
 - 結果 / エラー: `limactl start --tty=false --name=perfsonar-vm deploy/mac/lima-testpoint.yaml` で正常起動。VMは2つのIPを持つ: `eth0`(192.168.5.15/24, Lima標準のuser-mode NAT, metric 200) と `lima0`(192.168.1.104/23, socket_vmnet bridged、metric 100 = デフォルトルート)。`docker ps`がsudoなしで実行可能（SocketUserオーバーライド成功）。RasPi(192.168.1.101) ⇔ VM(192.168.1.104) 相互pingで到達性確認（VM→RasPiはIPv6優先で解決されたため`-4`指定でIPv4疎通も別途確認）。`run-testpoint.sh` をVM内で実行（リポジトリがホストと同一パスでマウントされているためscp不要）→ `pscheduler troubleshoot` 全項目OK（RasPiと同じくAPI level 6、idle test含め正常）
 - 判断・回避策: CLAUDE.mdのVM接続情報を `limactl shell perfsonar-vm`（内部IP 192.168.1.104, ユーザー dev）に更新。`docker-rootful.yaml`ベースのため、W2以降で`daemon.json`のcontainerd-snapshotter設定等が必要になった場合は追加検討
+
+## Step 3: 手動疎通テスト（twamp / rtt / trace）
+- 日付: 2026-07-26
+- やったこと: VM側testpointコンテナから3種を実行。iperf3(throughput)はCLAUDE.md規約により深夜〜早朝限定・実行前ユーザー確認が必要なため本ステップでは未実施（別途タイミング調整）
+- ハマりポイント: runbook-w1.mdに書いていた `pscheduler task twamp ...` は**存在しないテスト名でエラー**（`Could not find test twamp on server`）。pSchedulerには独立した"twamp"テストは無く、**"latency"テストの `--protocol=twamp` オプション**として実装されている（`pscheduler-test-latency`パッケージ）。runbook-w1.mdのコマンド例を `pscheduler task latency --protocol=twamp --source <vm-ip> --dest <raspi-ip>` に修正済み
+- 結果:
+  - **latency(twamp) VM→RasPi**: 100パケット送信、ロス0%、重複/順序入れ替えなし。One-way Delay: 中央値0.67ms / 最小0.37ms / 最大0.95ms / 標準偏差0.10ms。Max Clock Error 0.0ms（twampなので両端クロック同期不要という設計通りの結果）
+  - **rtt → 8091.info**: 0% loss, RTT mean 9.71ms（Cloudflare 104.21.24.217へ解決）
+  - **rtt → 1.1.1.1**: 0% loss, RTT mean 9.16ms
+  - **trace → 1.1.1.1**: hop1でISP機器 `ntt.setup`(192.168.1.1, 1.5ms) → hop2-5は応答なし(ISPコア機器のICMPフィルタと推測) → hop6以降Cloudflare網に到達、hop9(1.1.1.1)で17.7ms
+- 判断・回避策: twamp/rtt/traceの3種は正常。iperf3(throughput)実行タイミングをユーザーと相談してからStep3完了とする
