@@ -16,22 +16,22 @@
 
 ```bash
 # 1-1. 64bit 確認（aarch64 でなければ OS 入れ替えが必要 → ユーザーへエスカレーション）
-ssh <raspi> 'uname -m && cat /etc/os-release | head -2'
+ssh unpeeled@raspi-testpoint.local 'uname -m && cat /etc/os-release | head -2'
 
 # 1-2. cgroup v2 確認（"cgroup2fs" が期待値）
-ssh <raspi> 'stat -fc %T /sys/fs/cgroup/'
+ssh unpeeled@raspi-testpoint.local 'stat -fc %T /sys/fs/cgroup/'
 
 # 1-3. Docker 未導入なら
-ssh <raspi> 'curl -fsSL https://get.docker.com | sh && sudo usermod -aG docker $USER'
+ssh unpeeled@raspi-testpoint.local 'curl -fsSL https://get.docker.com | sh && sudo usermod -aG docker $USER'
 
 # 1-4. NTP 同期確認（chrony or systemd-timesyncd が同期済みであること）
-ssh <raspi> 'timedatectl status'
+ssh unpeeled@raspi-testpoint.local 'timedatectl status'
 
 # 1-5. testpoint 起動（deploy/raspi/run-testpoint.sh を scp して実行）
-scp deploy/raspi/run-testpoint.sh <raspi>:~/ && ssh <raspi> 'bash run-testpoint.sh'
+scp deploy/raspi/run-testpoint.sh unpeeled@raspi-testpoint.local:~/ && ssh unpeeled@raspi-testpoint.local 'bash run-testpoint.sh'
 
 # 1-6. 起動確認
-ssh <raspi> 'docker exec perfsonar-testpoint pscheduler troubleshoot'
+ssh unpeeled@raspi-testpoint.local 'docker exec perfsonar-testpoint pscheduler troubleshoot'
 ```
 
 **チェックポイント**: `pscheduler troubleshoot` が全項目 OK。NG 項目はログを experiments/w1-notes.md に記録。
