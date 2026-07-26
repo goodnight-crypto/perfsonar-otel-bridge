@@ -37,7 +37,7 @@ Zenn 記事投稿コンテスト「OpenTelemetryの知見を、記事にしよ�
 ### W1（〜7/26）環境構築と疎通
 - [x] Splunk O11y Free Edition 取得、realm / INGEST トークン確保
 - [x] RasPi: 64bit 確認 → Docker → testpoint 起動（設定 volume 永続化）
-- [ ] Mac: Linux VM（ブリッジ接続）構築 → testpoint 起動
+- [x] Mac: Linux VM（ブリッジ接続）構築 → testpoint 起動
 - [ ] twamp / rtt / iperf3 の手動疎通確認（双方向）
 - [ ] HTTP archiver の生 JSON をダンプ → docs/samples/ に保存、schema.md 初版確定
 

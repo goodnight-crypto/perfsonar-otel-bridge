@@ -1,0 +1,49 @@
+# perfSONAR testpoint 用 Linux VM (Lima)
+#
+# 起動: limactl start --tty=false --name=perfsonar-vm deploy/mac/lima-testpoint.yaml
+# 要件: RasPi との双方向到達性（LAN ブリッジ、socket_vmnet 経由）。
+#       ~/.lima/_config/networks.yaml に bridged ネットワーク（en0）が定義済みであること。
+#       手順は docs/runbook-w1.md Step 2 を参照。
+# バージョン固定理由: 記事の再現性のため ubuntu-lts エイリアスではなく 24.04 を明示指定。
+
+minimumLimaVersion: 2.0.0
+
+base:
+- template:_images/ubuntu-24.04
+- template:_default/mounts
+
+networks:
+- lima: bridged
+
+# containerd は使わず Docker (rootful) を使う。run-testpoint.sh が --net=host 等を
+# 前提にしているため rootless docker は不可。
+containerd:
+  system: false
+  user: false
+
+provision:
+- mode: system
+  script: |
+    #!/bin/bash
+    set -eux -o pipefail
+    command -v docker >/dev/null 2>&1 && exit 0
+    export DEBIAN_FRONTEND=noninteractive
+    curl -fsSL https://get.docker.com | sh
+- mode: yq
+  path: /etc/systemd/system/docker.socket.d/override.conf
+  format: ini
+  expression: .Socket.SocketUser="{{.User}}"
+
+probes:
+- script: |
+    #!/bin/bash
+    set -eux -o pipefail
+    if ! timeout 30s bash -c "until command -v docker >/dev/null 2>&1; do sleep 3; done"; then
+      echo >&2 "docker is not installed yet"
+      exit 1
+    fi
+    if ! timeout 30s bash -c "until pgrep dockerd; do sleep 3; done"; then
+      echo >&2 "dockerd is not running"
+      exit 1
+    fi
+  hint: See "/var/log/cloud-init-output.log" in the guest

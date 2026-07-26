@@ -118,7 +118,7 @@ docker exec perfsonar-testpoint pscheduler task \
 ## Exit Criteria（W1 完了条件）
 
 - [x] Splunk realm / トークンが .env に設定済み、CLAUDE.md 更新済み
-- [ ] RasPi・Mac VM 両方で testpoint が稼働、`pscheduler troubleshoot` OK
+- [x] RasPi・Mac VM 両方で testpoint が稼働、`pscheduler troubleshoot` OK
 - [ ] 4 テスト種の手動疎通 OK
 - [ ] 4 テスト種の archiver JSON サンプル取得済み
 - [ ] docs/schema.md 初版確定（ブリッジ実装に着手できる状態）
