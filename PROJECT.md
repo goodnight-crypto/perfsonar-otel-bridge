@@ -22,7 +22,7 @@ Zenn 記事投稿コンテスト「OpenTelemetryの知見を、記事にしよ�
 | パス | テスト | ツール | 間隔 | 狙い |
 |---|---|---|---|---|
 | Mac VM ↔ RasPi | RTT+ロス | twamp | 5分 | LAN 基準線。クロック非依存 |
-| Mac VM ↔ RasPi | スループット | iperf3 | 6時間(深夜帯) | RasPi の ARM 上限(~300Mbps)自体を観測 |
+| Mac VM ↔ RasPi | スループット | iperf3 | 6時間(深夜帯) | GbE 有線区間のスループット定点観測（実測929Mbps、理論値近傍。W1実施前は旧Pi/USB Ethernet由来の~300Mbps上限を想定していたが、Pi4BはPCIe直結GbEのためその制約は非該当と判明） |
 | Mac VM → 8091.info | RTT | rtt | 5分 | 自ブログのエッジ到達性 |
 | Mac VM → 1.1.1.1 | RTT+経路 | rtt / trace | 5分/30分 | ISP 品質の定点観測 |
 | RasPi 有線 vs 無線 | RTT+ロス | twamp | 5分 | Wi-Fi 品質比較（余力があれば） |
@@ -38,7 +38,7 @@ Zenn 記事投稿コンテスト「OpenTelemetryの知見を、記事にしよ�
 - [x] Splunk O11y Free Edition 取得、realm / INGEST トークン確保
 - [x] RasPi: 64bit 確認 → Docker → testpoint 起動（設定 volume 永続化）
 - [x] Mac: Linux VM（ブリッジ接続）構築 → testpoint 起動
-- [ ] twamp / rtt / iperf3 の手動疎通確認（双方向）
+- [x] twamp / rtt / iperf3 の手動疎通確認（双方向）※RasPi→VM方向のtwamp one-way delayに要フォローアップ事項あり（w1-notes.md参照）
 - [ ] HTTP archiver の生 JSON をダンプ → docs/samples/ に保存、schema.md 初版確定
 
 ### W2（〜8/2）パイプライン構築と実験

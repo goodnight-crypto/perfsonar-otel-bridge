@@ -32,13 +32,18 @@
 - 結果 / エラー: `limactl start --tty=false --name=perfsonar-vm deploy/mac/lima-testpoint.yaml` で正常起動。VMは2つのIPを持つ: `eth0`(192.168.5.15/24, Lima標準のuser-mode NAT, metric 200) と `lima0`(192.168.1.104/23, socket_vmnet bridged、metric 100 = デフォルトルート)。`docker ps`がsudoなしで実行可能（SocketUserオーバーライド成功）。RasPi(192.168.1.101) ⇔ VM(192.168.1.104) 相互pingで到達性確認（VM→RasPiはIPv6優先で解決されたため`-4`指定でIPv4疎通も別途確認）。`run-testpoint.sh` をVM内で実行（リポジトリがホストと同一パスでマウントされているためscp不要）→ `pscheduler troubleshoot` 全項目OK（RasPiと同じくAPI level 6、idle test含め正常）
 - 判断・回避策: CLAUDE.mdのVM接続情報を `limactl shell perfsonar-vm`（内部IP 192.168.1.104, ユーザー dev）に更新。`docker-rootful.yaml`ベースのため、W2以降で`daemon.json`のcontainerd-snapshotter設定等が必要になった場合は追加検討
 
-## Step 3: 手動疎通テスト（twamp / rtt / trace）
+## Step 3: 手動疎通テスト（twamp / rtt / trace / throughput）
 - 日付: 2026-07-26
-- やったこと: VM側testpointコンテナから3種を実行。iperf3(throughput)はCLAUDE.md規約により深夜〜早朝限定・実行前ユーザー確認が必要なため本ステップでは未実施（別途タイミング調整）
-- ハマりポイント: runbook-w1.mdに書いていた `pscheduler task twamp ...` は**存在しないテスト名でエラー**（`Could not find test twamp on server`）。pSchedulerには独立した"twamp"テストは無く、**"latency"テストの `--protocol=twamp` オプション**として実装されている（`pscheduler-test-latency`パッケージ）。runbook-w1.mdのコマンド例を `pscheduler task latency --protocol=twamp --source <vm-ip> --dest <raspi-ip>` に修正済み
+- やったこと: VM側testpointコンテナから4種すべてを実行。throughput(iperf3)はCLAUDE.md規約により実行前にユーザーへ確認した上で日中に手動実行（規約上「スケジュール実行」を深夜帯に限定しており、確認済みの手動実行は対象外という運用で対応）
+- ハマりポイント①: runbook-w1.mdに書いていた `pscheduler task twamp ...` は**存在しないテスト名でエラー**（`Could not find test twamp on server`）。pSchedulerには独立した"twamp"テストは無く、**"latency"テストの `--protocol=twamp` オプション**として実装されている（`pscheduler-test-latency`パッケージ）。runbook-w1.mdのコマンド例を `pscheduler task latency --protocol=twamp --source <vm-ip> --dest <raspi-ip>` に修正済み
+- ハマりポイント②: throughputの1回目実行は `Run did not complete: Missed` で失敗。2回目（コマンドをそのまま再実行）は成功。原因未特定だが、タスク登録直後のスケジューリング窓に間に合わなかった一過性の事象と推測（記事では「初回missedは再実行で解消するケースがある」注意点として触れる）
 - 結果:
-  - **latency(twamp) VM→RasPi**: 100パケット送信、ロス0%、重複/順序入れ替えなし。One-way Delay: 中央値0.67ms / 最小0.37ms / 最大0.95ms / 標準偏差0.10ms。Max Clock Error 0.0ms（twampなので両端クロック同期不要という設計通りの結果）
+  - **latency(twamp) VM→RasPi**: 100パケット送信、ロス0%、重複/順序入れ替えなし。One-way Delay: 中央値0.67ms / 最小0.37ms / 最大0.95ms / 標準偏差0.10ms。Max Clock Error 0.0ms
+  - **latency(twamp) RasPi→VM（逆方向）**: 100パケット送信、ロス0%だが One-way Delay が**中央値-4.62ms / 最小-23.92ms / 最大2.49ms / 分散31.46ms**と大きく負に振れ、ジッタも異常に大きい。Max Clock Errorは0.0msと報告されるが実態と矛盾
   - **rtt → 8091.info**: 0% loss, RTT mean 9.71ms（Cloudflare 104.21.24.217へ解決）
   - **rtt → 1.1.1.1**: 0% loss, RTT mean 9.16ms
   - **trace → 1.1.1.1**: hop1でISP機器 `ntt.setup`(192.168.1.1, 1.5ms) → hop2-5は応答なし(ISPコア機器のICMPフィルタと推測) → hop6以降Cloudflare網に到達、hop9(1.1.1.1)で17.7ms
-- 判断・回避策: twamp/rtt/traceの3種は正常。iperf3(throughput)実行タイミングをユーザーと相談してからStep3完了とする
+  - **throughput(iperf3) VM→RasPi**: 平均929.30Mbps（受信側939.84Mbps）、再送7回/10秒
+  - **throughput(iperf3) RasPi→VM（逆方向）**: 平均941.81Mbps（受信側926.61Mbps）、再送0回。往路より安定
+- 判断・回避策①: **PROJECT.mdの測定マトリクスにある「RasPiのARM上限(~300Mbps)」という想定は誤り**。この~300Mbpsという数値はRaspberry Pi 3系やUSB接続イーサネットアダプタでの制約であり、Raspberry Pi 4BはGbE NICがUSBではなくPCIe直結のため理論値(940Mbps)近くまで出る。双方向とも同水準。**記事ネタ**: 「事前の想定と実測が食い違った」好例として使える。PROJECT.md訂正済み
+- 判断・回避策②（要フォローアップ）: **twampは"クロック非依存"という理解は不正確だった**。パケットロス数・往復の疎通確認自体はクロックに依存しないが、one-way delayの内訳（片道遅延）はTWAMPでも両端の時計同期に依存する。RasPi→VM方向でのみ大きな負の遅延・異常なジッタが出たのは、RasPi側のクロック（NTP同期）が不安定な可能性が高い。raspi-kitting.mdにも「長期保管後のRTCズレ」への言及あり — Step1のtimedatectl確認時点ではOKだったが、その後ドリフトしたか、chronyの同期が浅い状態だった可能性。**要対応**: RasPi側で`timedatectl status`/`chronyc tracking`を再確認し、同期状況次第では再同期を待つ or chrony設定を見直す。ロス率・スループットの定点観測には影響しないが、one-way delayの絶対値をSplunkダッシュボードで見せる場合は解決必須
