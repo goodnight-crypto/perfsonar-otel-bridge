@@ -46,4 +46,11 @@
   - **throughput(iperf3) VM→RasPi**: 平均929.30Mbps（受信側939.84Mbps）、再送7回/10秒
   - **throughput(iperf3) RasPi→VM（逆方向）**: 平均941.81Mbps（受信側926.61Mbps）、再送0回。往路より安定
 - 判断・回避策①: **PROJECT.mdの測定マトリクスにある「RasPiのARM上限(~300Mbps)」という想定は誤り**。この~300Mbpsという数値はRaspberry Pi 3系やUSB接続イーサネットアダプタでの制約であり、Raspberry Pi 4BはGbE NICがUSBではなくPCIe直結のため理論値(940Mbps)近くまで出る。双方向とも同水準。**記事ネタ**: 「事前の想定と実測が食い違った」好例として使える。PROJECT.md訂正済み
-- 判断・回避策②（要フォローアップ）: **twampは"クロック非依存"という理解は不正確だった**。パケットロス数・往復の疎通確認自体はクロックに依存しないが、one-way delayの内訳（片道遅延）はTWAMPでも両端の時計同期に依存する。RasPi→VM方向でのみ大きな負の遅延・異常なジッタが出たのは、RasPi側のクロック（NTP同期）が不安定な可能性が高い。raspi-kitting.mdにも「長期保管後のRTCズレ」への言及あり — Step1のtimedatectl確認時点ではOKだったが、その後ドリフトしたか、chronyの同期が浅い状態だった可能性。**要対応**: RasPi側で`timedatectl status`/`chronyc tracking`を再確認し、同期状況次第では再同期を待つ or chrony設定を見直す。ロス率・スループットの定点観測には影響しないが、one-way delayの絶対値をSplunkダッシュボードで見せる場合は解決必須
+- 判断・回避策②（要フォローアップ、原因判明・恒久対処は未実施）: **twampは"クロック非依存"という理解は不正確だった**。パケットロス数・往復の疎通確認自体はクロックに依存しないが、one-way delayの内訳（片道遅延）はTWAMPでも両端の時計同期に依存する。当初RasPi側を疑ったが、実際に調査すると原因は**VM(Lima)側**だった:
+  - RasPi: `timedatectl timesync-status` で offset -488μs、jitter 1.1ms、7時間安定同期（chronyc未導入・systemd-timesyncd使用、問題なし）
+  - VM: `timedatectl timesync-status` で **offset +216.602ms**、`Frequency: +500.000ppm`（systemd-timesyncdの最大スルーレート）に張り付いたまま1時間21分経過しても収束せず。ホストMacとVMの時刻を直接比較しても150-200ms程度のズレを実測で確認
+  - 検証のためVM内の`systemd-timesyncd`を停止 → 直後の逆方向twampは**-173.82ms（ジッタは小さく安定）**という結果に。ジッタは消えたが恒常的な大オフセットが露呈。これは「稼働中のtimesyncdが収束しきれない大きなドリフトと戦い続けて不安定な補正結果を出していた」ことを示唆（timesyncd停止後はどの補正もかからず素のクロック誤差がそのまま出た）
+  - `systemd-timesyncd`を元に戻して終了（暫定措置。恒久対処は未実施）
+  - **仮説**: Lima(vzドライバ)配下のゲストクロックは、起動時に一度だけホストと同期される(hostagentログの"Time sync: guest clock adjusted"）が、その後の継続的なドリフト補正が systemd-timesyncd の最大スルーレート(500ppm ≒ 174msの補正に約6分)を上回るペースで発生している可能性がある。Mac自体のスリープ・CPU出力制御等でVMプロセスが一時的にスケジューリングされない時間帯が影響しているかもしれない
+  - **記事ネタ**: 「twampを使えばクロック同期を気にしなくていい」という安易な理解は誤りで、実際には計測環境（特に仮想化ゲスト）のクロック品質を検証する必要があるという教訓
+  - **要対応(W2までに)**: chronyの導入（`makestep`で大きなオフセットを即座にステップ補正できる、systemd-timesyncdより堅牢）を検討。ロス率・スループットの定点観測には影響しないが、one-way delayの絶対値をSplunkダッシュボードで見せる場合は解決必須

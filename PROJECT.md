@@ -38,7 +38,7 @@ Zenn 記事投稿コンテスト「OpenTelemetryの知見を、記事にしよ�
 - [x] Splunk O11y Free Edition 取得、realm / INGEST トークン確保
 - [x] RasPi: 64bit 確認 → Docker → testpoint 起動（設定 volume 永続化）
 - [x] Mac: Linux VM（ブリッジ接続）構築 → testpoint 起動
-- [x] twamp / rtt / iperf3 の手動疎通確認（双方向）※RasPi→VM方向のtwamp one-way delayに要フォローアップ事項あり（w1-notes.md参照）
+- [x] twamp / rtt / iperf3 の手動疎通確認（双方向）※VM(Lima)側クロック同期に要フォローアップ事項あり（w1-notes.md参照、W2までにchrony導入を検討）
 - [ ] HTTP archiver の生 JSON をダンプ → docs/samples/ に保存、schema.md 初版確定
 
 ### W2（〜8/2）パイプライン構築と実験
