@@ -1,0 +1,34 @@
+# ブリッジ + OTel Collector（Mac 側）
+#
+# 起動前に必ずトークンを shell へ読み込むこと。`env_file` や `--env-file` は
+# .env のインラインコメントを値に含めてしまい Splunk が 401 を返す:
+#
+#   set -a; . ../../.env; set +a
+#   docker compose -f deploy/mac/compose.yaml up -d
+services:
+  bridge:
+    build: ../../bridge
+    container_name: psotel-bridge
+    environment:
+      OTLP_METRICS_ENDPOINT: http://collector:4318/v1/metrics
+    ports:
+      # perfSONAR testpoint（VM / RasPi）から届く archiver の PUT を受ける。
+      # ホスト側 8000 は Hermes Agent の honcho-api が使用中のため 8088 にずらしてある。
+      # archiver の _url もこのポートを指すこと
+      - "8088:8000"
+    depends_on:
+      - collector
+    restart: unless-stopped
+
+  collector:
+    image: otel/opentelemetry-collector-contrib:0.157.0
+    container_name: psotel-collector
+    command: ["--config=/etc/otelcol/config.yaml"]
+    environment:
+      SPLUNK_REALM: ${SPLUNK_REALM:?shell に読み込まれていない}
+      SPLUNK_ACCESS_TOKEN: ${SPLUNK_ACCESS_TOKEN:?shell に読み込まれていない}
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "4318:4318"
+    restart: unless-stopped

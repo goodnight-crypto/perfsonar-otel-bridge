@@ -1,4 +1,10 @@
-# OTel Collector 設定ドラフト (W2 で疎通確認しながら確定)
+# OTel Collector 設定（W2 で Splunk への疎通確認済み: 2026-07-27）
+#
+# 検証済みイメージ: otel/opentelemetry-collector-contrib:0.157.0
+# 起動時はトークンを shell 経由で渡すこと（`docker --env-file` はインラインコメントを
+# 値に含めてしまい 401 になる。詳細は .env.example と experiments/w2-notes.md）:
+#   set -a; . ./.env; set +a
+#   docker run -e SPLUNK_REALM -e SPLUNK_ACCESS_TOKEN ...
 receivers:
   otlp:
     protocols:
@@ -7,7 +13,8 @@ receivers:
 processors:
   batch: {}
 exporters:
-  otlphttp/splunk:
+  # 0.157 で "otlphttp" は非推奨エイリアスになった（"otlp_http" が正）
+  otlp_http/splunk:
     metrics_endpoint: "https://ingest.${env:SPLUNK_REALM}.signalfx.com/v2/datapoint/otlp"
     headers:
       X-SF-Token: "${env:SPLUNK_ACCESS_TOKEN}"
@@ -16,4 +23,4 @@ service:
     metrics:
       receivers: [otlp]
       processors: [batch]
-      exporters: [otlphttp/splunk]
+      exporters: [otlp_http/splunk]
