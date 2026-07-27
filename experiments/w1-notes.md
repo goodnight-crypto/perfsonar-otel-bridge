@@ -76,3 +76,14 @@
   2. twamp(latency)のone-way delayは補助指標とし、ブリッジ(W2)で`max-clock-error`を見て閾値超過時は欠測扱い/品質フラグ付き出力にする
   3. VMが絡まないパス（RasPi有線↔無線、実装する場合）は両端クロック良好のためone-way delayも信頼できる区別として扱う
 - **記事ネタ**: 「厳密さを追求して仮想化環境の限界にぶつかり、指標自体を諦めるのではなくデータ品質ゲートを設計して現実的に折り合いをつけた」というエンジニアリング判断の実例として使える
+
+## Step 4: HTTP archiverの生JSON観察
+- 日付: 2026-07-27
+- やったこと: Mac側にPythonの使い捨てHTTPサーバーを立て、VM側testpointから4種すべて（twamp(latency)/rtt×2/trace/throughput）をarchiver付きで実行し、docs/samples/に生JSONを保存
+- ハマりポイント①: runbook-w1.mdのサンプル受信スクリプトは`do_POST`のみ実装していたが、pSchedulerのhttp archiverは**デフォルトで`op: put`（HTTP PUTメソッド）を使う**ため、`501 Unsupported method ('PUT')`で全滅した。`do_PUT`も実装して解決。runbook修正済み
+- ハマりポイント②: `--archive '{"archiver": "http", ...}'` のようにインラインJSONを渡すと、`Mac側shell → limactl shell → docker exec` という多段の引数受け渡しの過程で引用符が壊れ、`archiver_data`の`_url`が**null**になり archiving が静かに失敗していた（エラー自体は出るが標準出力には出ず、run詳細JSONの`archivings[].diags`を見て初めて気づいた）。`pscheduler task --archive=@/path/to/file` でコンテナ内のファイルを直接参照する方式に切り替えて解決。runbook修正済み
+- **デバッグ手法として有用だったこと**: archiverの成否は`pscheduler task`のプレーン出力には出ない。`curl -sk https://<host>/pscheduler/tasks/<id>/runs/<id>`でrun詳細JSONを取得し`archivings`配列を見るのが確実
+- 結果: 4種すべてのサンプルJSONを取得（docs/samples/に保存、ファイル名にテスト種別を明記）
+  - `rtt-1.1.1.1-*.json` (4.5KB), `rtt-8091.info-*.json` (4.7KB), `latency-twamp-192.168.1.101-*.json` (5.9KB), `trace-1.1.1.1-*.json` (3.3KB), `throughput-192.168.1.104-to-192.168.1.101-*.json` (95KB、iperf3の秒間ストリーム統計を含むため大きい)
+  - 共通のトップレベル構造: `id, schedule, test, tool, run, task, participants, result, reference`
+- 判断・回避策: Step5でこれらのJSONを読み込み、docs/schema.mdのJSONPath・OTelメトリクスマッピング表を確定させる

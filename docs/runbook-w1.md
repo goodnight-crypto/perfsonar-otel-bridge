@@ -85,26 +85,38 @@ RasPi 側スループットの実測値（~300Mbps 想定）をメモ。
 
 ## Step 4: HTTP archiver の生 JSON 観察
 
-ブリッジ実装前に、pScheduler が POST してくる JSON の実物を確保する。
+ブリッジ実装前に、pScheduler が送ってくる JSON の実物を確保する。
 
 ```bash
-# 4-1. Mac 側で受け口を立てる（使い捨て）
+# 4-1. Mac 側で受け口を立てる（使い捨て）。pSchedulerのhttp archiverはデフォルトで
+# op=put、つまりHTTP PUTでpostするため、do_PUTのハンドリングが必須（do_POSTのみだと501エラー）
 python3 -c "
 from http.server import BaseHTTPRequestHandler, HTTPServer
-import json, datetime
+import datetime
 class H(BaseHTTPRequestHandler):
-    def do_POST(self):
+    def _save(self):
         body = self.rfile.read(int(self.headers['Content-Length']))
-        fn = f'docs/samples/{datetime.datetime.now():%Y%m%d-%H%M%S}.json'
-        open(fn,'wb').write(body); print('saved', fn)
+        fn = f'docs/samples/{datetime.datetime.now():%Y%m%d-%H%M%S-%f}.json'
+        open(fn,'wb').write(body); print('saved', fn, flush=True)
         self.send_response(200); self.end_headers()
+    def do_PUT(self): self._save()
+    def do_POST(self): self._save()
 HTTPServer(('0.0.0.0', 8000), H).serve_forever()
 "
 
-# 4-2. archiver 付きでタスク実行（twamp / rtt / throughput / trace の 4 種すべて）
-docker exec perfsonar-testpoint pscheduler task \
-  --archive '{"archiver": "http", "data": {"_url": "http://<mac-ip>:8000/", "op": "put"}}' \
-  twamp --source <vm-ip> --dest <raspi-ip>
+# 4-2. archive spec は docker exec の中で直接ファイル化してから参照する。
+# ローカルshell -> limactl shell -> docker exec と多段になるため、--archive に
+# インラインJSONを渡すと引用符が壊れて _url が null になる事故が起きた。
+# --archive=@/path/to/file （コンテナ内のパス）を使えば安全
+docker exec perfsonar-testpoint bash -c '
+cat > /tmp/archive.json <<EOF
+{"archiver": "http", "data": {"_url": "http://<mac-ip>:8000/", "op": "put"}}
+EOF
+pscheduler task --archive=@/tmp/archive.json latency --protocol=twamp --source <vm-ip> --dest <raspi-ip>
+pscheduler task --archive=@/tmp/archive.json rtt --dest 8091.info
+pscheduler task --archive=@/tmp/archive.json trace --dest 1.1.1.1
+pscheduler task --archive=@/tmp/archive.json throughput --source <vm-ip> --dest <raspi-ip>
+'
 ```
 
 **チェックポイント**: 4 テスト種すべてのサンプル JSON が docs/samples/ に保存されている。
@@ -121,5 +133,5 @@ docker exec perfsonar-testpoint pscheduler task \
 - [x] Splunk realm / トークンが .env に設定済み、CLAUDE.md 更新済み
 - [x] RasPi・Mac VM 両方で testpoint が稼働、`pscheduler troubleshoot` OK
 - [x] 4 テスト種の手動疎通 OK
-- [ ] 4 テスト種の archiver JSON サンプル取得済み
+- [x] 4 テスト種の archiver JSON サンプル取得済み
 - [ ] docs/schema.md 初版確定（ブリッジ実装に着手できる状態）
