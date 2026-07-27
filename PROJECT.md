@@ -23,7 +23,7 @@ Zenn 記事投稿コンテスト「OpenTelemetryの知見を、記事にしよ�
 |---|---|---|---|---|
 | Mac VM ↔ RasPi | RTT+ロス | `rtt` (`--tool twping`) | 5分 | **LAN 基準線**。TWAMP の two-way 測定なのでクロック非依存 |
 | Mac VM ↔ RasPi | 片道遅延 | `latency` (twamp) | 5分 | 参考値。`max-clock-error` 品質ゲートの実演材料 |
-| Mac VM ↔ RasPi | スループット | iperf3 | **1日1回 03:00 JST** | GbE 有線区間のスループット定点観測（実測929Mbps、理論値近傍。W1実施前は旧Pi/USB Ethernet由来の~300Mbps上限を想定していたが、Pi4BはPCIe直結GbEのためその制約は非該当と判明） |
+| Mac VM ↔ RasPi | スループット | iperf3 | **30分間隔（終日）** | GbE 有線区間のスループット定点観測（実測929〜940Mbps、理論値近傍。W1実施前は旧Pi/USB Ethernet由来の~300Mbps上限を想定していたが、Pi4BはPCIe直結GbEのためその制約は非該当と判明） |
 | Mac VM → 8091.info | RTT | `rtt` (ping) | 5分 | 自ブログのエッジ到達性。対向に TWAMP responder が無いため ICMP |
 | Mac VM → 1.1.1.1 | RTT+経路 | `rtt` (ping) / `trace` | 5分/30分 | ISP 品質の定点観測。同上 |
 | RasPi 有線 vs 無線 | RTT+ロス | `rtt` (`--tool twping`) | 5分 | Wi-Fi 品質比較（余力があれば） |
@@ -34,12 +34,19 @@ Zenn 記事投稿コンテスト「OpenTelemetryの知見を、記事にしよ�
 > クロック非依存の RTT が得られる。ブリッジの追加実装は不要。ICMP と違いレート制限・優先度低下の影響も受けない。
 > 詳細な経緯は docs/schema.md「rtt を twping で実行する場合」を参照。
 
-> **iperf3 の実行頻度を「6時間ごと」から「1日1回 03:00 JST」に変更（W2 pSConfig 本番化時）**:
-> pSConfig の schedule は `repeat-cron` に対応せず（`ScheduleSpecification` は
-> `start`/`repeat`/`slip`/`sliprand`/`until`/`max-runs` のみ、`additionalProperties: false`）、
-> 「6時間ごと、ただし深夜帯だけ」を表現できない。6時間間隔にすると日中も走り CLAUDE.md 規約2に反する。
-> 絶対時刻の `start`（18:00Z = 翌03:00 JST）+ `repeat: P1D` + `slip: PT30M` とし、
-> 最遅でも 03:30 JST に収まることを pScheduler 上で実測確認済み。
+> **iperf3 の実行頻度を「終日30分間隔」に変更（2026-07-28、実測に基づく）**:
+> 当初は「深夜帯のみ」の制約下で、pSConfig が `repeat-cron` に対応しない
+> （`ScheduleSpecification` は `start`/`repeat`/`slip`/`sliprand`/`until`/`max-runs` のみ、
+> `additionalProperties: false`）ため、絶対時刻 `start` + `repeat: P1D` で 03:00 JST 固定にしていた。
+>
+> その後、実行中に Mac から外部 ping で影響を実測した。**WAN(1.1.1.1) の RTT 中央値は
+> 8.795→9.506ms（+0.71ms、+8%）、LAN は 0.554→1.39ms、パケットロスは 2700発中 0。**
+> 影響が出るのは `duration: PT20S` に対応する約20秒間のみ。家庭用ルーターが LAN 内スイッチングを
+> ハードウェア処理しているため WAN 側にほぼ波及しないという想定どおりの結果で、時間帯限定を解除した。
+>
+> 5分間隔にしなかった理由: 有線GbEのスループットは極めて安定しており（929〜940Mbps、変動1%程度）
+> 高頻度サンプリングの情報量が小さい。加えて throughput は `exclusive` スケジューリングクラスなので、
+> 同じく5分間隔の `latency` テストと頻繁に衝突して測定時刻が乱れる。
 
 ### メトリクススキーマ（詳細: docs/schema.md）
 

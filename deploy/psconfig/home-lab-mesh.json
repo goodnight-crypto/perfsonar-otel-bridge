@@ -74,16 +74,7 @@
 
   "schedules": {
     "every-5min":  { "repeat": "PT5M",  "slip": "PT2M", "sliprand": true },
-    "every-30min": { "repeat": "PT30M", "slip": "PT5M", "sliprand": true },
-    "nightly-0300jst": {
-      "_meta": {
-        "note": "pSConfig の schedule は repeat-cron に対応しないため、絶対時刻の start + P1D で時刻を固定する。18:00Z = 翌 03:00 JST。slip を 30 分に抑え、規約の 02:00-06:00 JST から出ないようにしている"
-      },
-      "start": "2026-07-27T18:00:00Z",
-      "repeat": "P1D",
-      "slip": "PT30M",
-      "sliprand": true
-    }
+    "every-30min": { "repeat": "PT30M", "slip": "PT5M", "sliprand": true }
   },
 
   "archives": {
@@ -114,9 +105,12 @@
       "reference": { "path.id": "lan-wired" }
     },
     "lan-throughput-task": {
+      "_meta": {
+        "note": "終日30分間隔。2026-07-28 に実行中の外部 ping で影響を実測した結果、WAN(1.1.1.1) の RTT 中央値が 8.795→9.506ms（+0.71ms）、ロスは 2700発中 0 で、家族のネット利用への影響は無視できると判断した。詳細は experiments/w2-notes.md Step 6"
+      },
       "group": "lan-pair",
       "test": "lan-throughput",
-      "schedule": "nightly-0300jst",
+      "schedule": "every-30min",
       "tools": [ "iperf3" ],
       "archives": [ "otel-bridge" ],
       "reference": { "path.id": "lan-wired" }
