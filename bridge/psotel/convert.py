@@ -3,13 +3,20 @@
 変換仕様の正は ../../docs/schema.md。
 """
 
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
 
+logger = logging.getLogger(__name__)
+
 # max-clock-error がこの値を超えたら片道遅延を信頼しない（docs/schema.md）。
-# 実測は正常時 0.0ms / 異常時 27.47ms でその中間に置いた。
-CLOCK_ERROR_THRESHOLD_MS = 5.0
+#
+# 当初は 5.0 だった（「正常時 0.0ms / 異常時 27.47ms の中間」という根拠）。
+# その後 VM のクロックが収束し、正常時が 0.0 ではなく 4.67〜4.88ms だと判明したため
+# 根拠が崩れた。健全域(〜4.88)と既知の異常(27.47)の対数中間 √(4.88×27.47)≒11.6 に近い
+# 10.0 へ引き上げた。異常サンプルは n=1 なので、これは検証済みの境界ではなく発見的な値。
+CLOCK_ERROR_THRESHOLD_MS = 10.0
 
 
 @dataclass(frozen=True)
@@ -78,7 +85,9 @@ def convert(envelope: dict) -> list[Metric]:
     metrics: list[Metric] = []
 
     def add(name: str, value: float, unit: str) -> None:
-        metrics.append(Metric(name, value, unit, attributes, time_unix_nano))
+        # メトリクスごとに独立した dict を持たせる。共有すると将来
+        # 属性を出し分けたときに同じ封筒の全メトリクスへ波及する
+        metrics.append(Metric(name, value, unit, dict(attributes), time_unix_nano))
 
     test_type = envelope["test"]["type"]
 
@@ -97,8 +106,14 @@ def convert(envelope: dict) -> list[Metric]:
         sent = result["packets-sent"]
         add("perfsonar.packet.loss.ratio", result["packets-lost"] / sent, "1")
         # クロック誤差が大きいと片道遅延は負値になるなど信頼できない。
-        # ロス率はクロック非依存なので落とさず、遅延だけをゲートする
-        if result["max-clock-error"] <= CLOCK_ERROR_THRESHOLD_MS:
+        # ロス率はクロック非依存なので落とさず、遅延だけをゲートする。
+        #
+        # 0.0 は「誤差なし」ではなく「推定できていない」を意味しうるため通さない。
+        # TWAMP の Error Estimate は Multiplier × 2^Scale 形式で、同期機構が見積もりを
+        # 提供できないと Multiplier が 0 のまま埋まる実装がある。実際 w1-notes.md:42 に
+        # 0.0 報告なのに片道遅延が中央値 -4.62ms と壊れていた例がある
+        clock_error = result["max-clock-error"]
+        if 0 < clock_error <= CLOCK_ERROR_THRESHOLD_MS:
             add("perfsonar.twamp.delay.median", weighted_median(result["histogram-latency"]), "ms")
 
     elif test_type == "trace":
@@ -107,5 +122,9 @@ def convert(envelope: dict) -> list[Metric]:
     elif test_type == "throughput":
         # intervals[] と diags は変換しない（サイズが大きく集計値のみで足りる）
         add("perfsonar.throughput.bps", result["summary"]["summary"]["receiver-throughput-bits"], "bit/s")
+
+    else:
+        # 黙って捨てると測定が消えたことに誰も気付けない
+        logger.warning("未対応のテスト種別のため変換しない: %s", test_type)
 
     return metrics

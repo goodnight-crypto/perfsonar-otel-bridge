@@ -67,6 +67,28 @@ def test_loss_ratio_survives_the_clock_gate(sample):
     assert "perfsonar.packet.loss.ratio" in names(metrics)
 
 
+def test_delay_median_survives_the_observed_healthy_clock_error():
+    # クロック収束後の実測は 4.67〜4.88ms。旧閾値 5.0 では余裕が 0.12ms しか無く系列が断続する
+    envelope = latency_envelope(max_clock_error=7.0, histogram={"1.0": 1, "2.0": 1, "3.0": 1})
+
+    assert "perfsonar.twamp.delay.median" in names(convert(envelope))
+
+
+def test_delay_median_is_gated_when_clock_error_is_reported_as_zero():
+    # 0.0 は「誤差なし」ではなく「推定できていない」を意味しうる。
+    # w1-notes.md:42 に 0.0 報告なのに片道遅延が中央値 -4.62ms と壊れていた実例がある
+    envelope = latency_envelope(max_clock_error=0.0, histogram={"1.0": 1, "2.0": 1, "3.0": 1})
+
+    assert "perfsonar.twamp.delay.median" not in names(convert(envelope))
+
+
+def test_delay_median_is_still_gated_at_the_known_broken_clock_error():
+    # W1 で観測した壊れた状態。閾値を上げても落とし続けること
+    envelope = latency_envelope(max_clock_error=27.47, histogram={"-11.8": 1, "-11.7": 1})
+
+    assert "perfsonar.twamp.delay.median" not in names(convert(envelope))
+
+
 def test_max_clock_error_is_exposed_as_attribute(sample):
     metrics = convert(sample("latency-twamp-192.168.1.101-"))
 
