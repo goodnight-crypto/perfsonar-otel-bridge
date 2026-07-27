@@ -1,0 +1,350 @@
+{
+  "id": "2ae3ae87-392e-4383-83a6-48055cd327cc",
+  "schedule": {
+    "start": "2026-07-27T11:41:24+00:00",
+    "duration": "PT21S"
+  },
+  "test": {
+    "spec": {
+      "dest": "192.168.1.101",
+      "count": 10,
+      "schema": 1,
+      "source": "192.168.1.104"
+    },
+    "type": "rtt"
+  },
+  "tool": {
+    "name": "twping",
+    "version": "1.0"
+  },
+  "run": {
+    "added": "2026-07-27T11:41:19+00:00",
+    "state": "finished",
+    "errors": null,
+    "duration": "PT4S",
+    "end-time": "2026-07-27T11:41:28+00:00",
+    "priority": null,
+    "start-time": "2026-07-27T11:41:24+00:00",
+    "limit-diags": "Hints:\n  requester: 192.168.1.104\n  server: 192.168.1.104\nIdentified as everybody, local-interfaces\nClassified as default, friendlies\nApplication: Hosts we trust to do (almost) everything\n  Group 1: Limit 'throughput-sane-parallel' passed\n  Group 1: Want all, 1/1 passed, 0/1 failed: PASS\n  Application PASSES\nPassed one application.  Stopping.\nProposal meets limits\nPriority set at 0:\n  Initial priority  (Set to 0)",
+    "participant": 0,
+    "result-full": [
+      {
+        "max": "PT0.001301S",
+        "min": "PT0.000725S",
+        "loss": 0.0,
+        "lost": 0,
+        "mean": "PT0.000976S",
+        "sent": 10,
+        "schema": 1,
+        "stddev": "PT0.000168S",
+        "received": 10,
+        "reorders": 0,
+        "succeeded": true,
+        "duplicates": 0,
+        "roundtrips": [
+          {
+            "ip": "192.168.1.101",
+            "rtt": "PT0.001301S",
+            "seq": 1,
+            "ttl": 255,
+            "length": 41
+          },
+          {
+            "ip": "192.168.1.101",
+            "rtt": "PT0.000976S",
+            "seq": 2,
+            "ttl": 255,
+            "length": 41
+          },
+          {
+            "ip": "192.168.1.101",
+            "rtt": "PT0.000725S",
+            "seq": 3,
+            "ttl": 255,
+            "length": 41
+          },
+          {
+            "ip": "192.168.1.101",
+            "rtt": "PT0.001045S",
+            "seq": 4,
+            "ttl": 255,
+            "length": 41
+          },
+          {
+            "ip": "192.168.1.101",
+            "rtt": "PT0.001176S",
+            "seq": 5,
+            "ttl": 255,
+            "length": 41
+          },
+          {
+            "ip": "192.168.1.101",
+            "rtt": "PT0.000879S",
+            "seq": 6,
+            "ttl": 255,
+            "length": 41
+          },
+          {
+            "ip": "192.168.1.101",
+            "rtt": "PT0.000824S",
+            "seq": 7,
+            "ttl": 255,
+            "length": 41
+          },
+          {
+            "ip": "192.168.1.101",
+            "rtt": "PT0.00096S",
+            "seq": 8,
+            "ttl": 255,
+            "length": 41
+          },
+          {
+            "ip": "192.168.1.101",
+            "rtt": "PT0.00098S",
+            "seq": 9,
+            "ttl": 255,
+            "length": 41
+          },
+          {
+            "ip": "192.168.1.101",
+            "rtt": "PT0.000896S",
+            "seq": 10,
+            "ttl": 255,
+            "length": 41
+          }
+        ]
+      }
+    ],
+    "participants": [
+      "192.168.1.104"
+    ],
+    "result-merged": {
+      "max": "PT0.001301S",
+      "min": "PT0.000725S",
+      "loss": 0.0,
+      "lost": 0,
+      "mean": "PT0.000976S",
+      "sent": 10,
+      "schema": 1,
+      "stddev": "PT0.000168S",
+      "received": 10,
+      "reorders": 0,
+      "succeeded": true,
+      "duplicates": 0,
+      "roundtrips": [
+        {
+          "ip": "192.168.1.101",
+          "rtt": "PT0.001301S",
+          "seq": 1,
+          "ttl": 255,
+          "length": 41
+        },
+        {
+          "ip": "192.168.1.101",
+          "rtt": "PT0.000976S",
+          "seq": 2,
+          "ttl": 255,
+          "length": 41
+        },
+        {
+          "ip": "192.168.1.101",
+          "rtt": "PT0.000725S",
+          "seq": 3,
+          "ttl": 255,
+          "length": 41
+        },
+        {
+          "ip": "192.168.1.101",
+          "rtt": "PT0.001045S",
+          "seq": 4,
+          "ttl": 255,
+          "length": 41
+        },
+        {
+          "ip": "192.168.1.101",
+          "rtt": "PT0.001176S",
+          "seq": 5,
+          "ttl": 255,
+          "length": 41
+        },
+        {
+          "ip": "192.168.1.101",
+          "rtt": "PT0.000879S",
+          "seq": 6,
+          "ttl": 255,
+          "length": 41
+        },
+        {
+          "ip": "192.168.1.101",
+          "rtt": "PT0.000824S",
+          "seq": 7,
+          "ttl": 255,
+          "length": 41
+        },
+        {
+          "ip": "192.168.1.101",
+          "rtt": "PT0.00096S",
+          "seq": 8,
+          "ttl": 255,
+          "length": 41
+        },
+        {
+          "ip": "192.168.1.101",
+          "rtt": "PT0.00098S",
+          "seq": 9,
+          "ttl": 255,
+          "length": 41
+        },
+        {
+          "ip": "192.168.1.101",
+          "rtt": "PT0.000896S",
+          "seq": 10,
+          "ttl": 255,
+          "length": 41
+        }
+      ]
+    },
+    "state-display": "Finished",
+    "href": "https://lima-perfsonar-vm/pscheduler/tasks/8b929706-eb64-40c0-a6b8-27ff0bac6d0e/runs/2ae3ae87-392e-4383-83a6-48055cd327cc",
+    "task-href": "https://lima-perfsonar-vm/pscheduler/tasks/8b929706-eb64-40c0-a6b8-27ff0bac6d0e"
+  },
+  "task": {
+    "test": {
+      "spec": {
+        "dest": "192.168.1.101",
+        "count": 10,
+        "schema": 1,
+        "source": "192.168.1.104"
+      },
+      "type": "rtt"
+    },
+    "tool": "twping",
+    "tools": [
+      "twping"
+    ],
+    "detail": {
+      "cli": [
+        "--count",
+        "10",
+        "--dest",
+        "192.168.1.101",
+        "--source",
+        "192.168.1.104"
+      ],
+      "post": "P0D",
+      "runs": 1,
+      "slip": "PT5M",
+      "added": "2026-07-27T11:41:09+00:00",
+      "diags": "Hints:\n  requester: 192.168.1.104\n  server: 192.168.1.104\nIdentified as everybody, local-interfaces\nClassified as default, friendlies\nApplication: Hosts we trust to do (almost) everything\n  Group 1: Limit 'throughput-sane-parallel' passed\n  Group 1: Want all, 1/1 passed, 0/1 failed: PASS\n  Application PASSES\nPassed one application.  Stopping.\nProposal meets limits\nPriority set to default of 0",
+      "hints": {
+        "server": "192.168.1.104",
+        "requester": "192.168.1.104"
+      },
+      "start": null,
+      "anytime": true,
+      "enabled": true,
+      "duration": "PT21S",
+      "exclusive": false,
+      "participant": 0,
+      "multi-result": false,
+      "participants": [
+        "192.168.1.104"
+      ],
+      "runs-started": 1
+    },
+    "schedule": {
+      "slip": "PT5M"
+    },
+    "href": "https://lima-perfsonar-vm/pscheduler/tasks/8b929706-eb64-40c0-a6b8-27ff0bac6d0e"
+  },
+  "participants": [
+    "192.168.1.104"
+  ],
+  "result": {
+    "max": "PT0.001301S",
+    "min": "PT0.000725S",
+    "loss": 0.0,
+    "lost": 0,
+    "mean": "PT0.000976S",
+    "sent": 10,
+    "schema": 1,
+    "stddev": "PT0.000168S",
+    "received": 10,
+    "reorders": 0,
+    "succeeded": true,
+    "duplicates": 0,
+    "roundtrips": [
+      {
+        "ip": "192.168.1.101",
+        "rtt": "PT0.001301S",
+        "seq": 1,
+        "ttl": 255,
+        "length": 41
+      },
+      {
+        "ip": "192.168.1.101",
+        "rtt": "PT0.000976S",
+        "seq": 2,
+        "ttl": 255,
+        "length": 41
+      },
+      {
+        "ip": "192.168.1.101",
+        "rtt": "PT0.000725S",
+        "seq": 3,
+        "ttl": 255,
+        "length": 41
+      },
+      {
+        "ip": "192.168.1.101",
+        "rtt": "PT0.001045S",
+        "seq": 4,
+        "ttl": 255,
+        "length": 41
+      },
+      {
+        "ip": "192.168.1.101",
+        "rtt": "PT0.001176S",
+        "seq": 5,
+        "ttl": 255,
+        "length": 41
+      },
+      {
+        "ip": "192.168.1.101",
+        "rtt": "PT0.000879S",
+        "seq": 6,
+        "ttl": 255,
+        "length": 41
+      },
+      {
+        "ip": "192.168.1.101",
+        "rtt": "PT0.000824S",
+        "seq": 7,
+        "ttl": 255,
+        "length": 41
+      },
+      {
+        "ip": "192.168.1.101",
+        "rtt": "PT0.00096S",
+        "seq": 8,
+        "ttl": 255,
+        "length": 41
+      },
+      {
+        "ip": "192.168.1.101",
+        "rtt": "PT0.00098S",
+        "seq": 9,
+        "ttl": 255,
+        "length": 41
+      },
+      {
+        "ip": "192.168.1.101",
+        "rtt": "PT0.000896S",
+        "seq": 10,
+        "ttl": 255,
+        "length": 41
+      }
+    ]
+  },
+  "reference": null
+}

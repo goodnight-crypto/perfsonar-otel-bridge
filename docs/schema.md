@@ -34,6 +34,29 @@ pSchedulerのHTTP archiverが送るJSONは、トップレベルの`result`が`ru
 | perfsonar.rtt.max | Gauge | ms | `.result.max` |
 | perfsonar.packet.loss.ratio | Gauge | 1 (0.0-1.0) | `.result.loss` |
 
+#### rtt を twping で実行する場合（LAN 基準線）
+
+`pscheduler plugins` で確認したところ、`twping` ツールの対応テストは **`['latency', 'rtt']` の2つ**。
+つまり TWAMP は片道遅延専用ではなく、`rtt` テストのツールとしても選択できる。
+
+```bash
+pscheduler task --tool twping rtt --source 192.168.1.104 --dest 192.168.1.101 --count 20
+```
+
+**このとき返る JSON は ICMP ping 版の `rtt` と完全に同一スキーマ**（`mean`/`min`/`max`/`stddev`/`loss`/
+`sent`/`received`/`roundtrips[]`）。上記マッピング表がそのまま適用でき、**ブリッジの追加実装は不要**。
+
+TWAMP は Sender-Reflector 間の4タイムスタンプ(T1-T4)から `(T4-T1)-(T3-T2)` で RTT を算出するため、
+**両端のクロックがズレていても RTT は正しい**。実測でも、同一測定内で片道遅延が -0.874ms と負に壊れて
+いる状況で RTT は 0.777/1/1.16 ms（min/median/max）と妥当な値を返した。
+
+> **補足（記事ネタ）**: `twping` の生出力には `round-trip time` と `two-way jitter` が含まれるが、
+> pScheduler の **`latency` テストの結果 JSON はこれらを捨てて `histogram-latency`（片道）しか残さない**。
+> 同じ TWAMP 測定でも、どちらのテスト種別で実行するかで取れる情報が変わる。
+
+LAN 区間（VM ↔ RasPi、双方に TWAMP responder がある）は twping、対向に responder が無い WAN 側
+（8091.info / 1.1.1.1）は ICMP ping を使う。サンプル: `rtt-twping-192.168.1.101-*.taskoutput.json`
+
 ### latency（TWAMP、`--protocol=twamp`、`tool: twping`相当）
 
 ```
@@ -52,6 +75,18 @@ VM側クロック精度問題により、このone-way delayは`max-clock-error`
 | perfsonar.twamp.delay.median | Gauge | ms | `.result.histogram-latency` から算出 |
 | perfsonar.packet.loss.ratio | Gauge | 1 (0.0-1.0) | `.result.packets-lost / .result.packets-sent` |
 | （属性）ps.max_clock_error | attribute | ms | `.result.max-clock-error`。**閾値超過時はdelayメトリクスを欠測扱いにする品質ゲートとして使う** |
+
+**品質ゲートの限界（実測済みの偽陰性）**: `max-clock-error` は TWAMP 両端の**自己申告の推定値**であり、
+実態と乖離することがある。experiments/w1-notes.md:42 に、RasPi→VM 方向で片道遅延が
+中央値 -4.62ms / 最小 -23.92ms と明らかに壊れているのに **`max-clock-error` は 0.0ms と報告された**
+ケースが記録されている。つまり「ゲートは通るがデータは壊れている」状態が起こりうる。
+
+したがってこのゲートは「壊れたデータを完全に排除する仕組み」ではなく「明らかに壊れた区間を落とす
+ベストエフォート」として位置づける。**LAN 基準線の RTT は `rtt`+`twping` で別途取得しており
+（前述）、そちらはこの問題の影響を受けない**ため、SLO 指標の信頼性は担保される。
+
+閾値の初期値は **5.0 ms** とする（実測値は正常時 0.0ms / 異常時 27.47ms と大きく開いており、
+その中間に置けば両者を分離できるため）。運用しながら見直す。
 
 ### trace（`tool: traceroute`相当）
 
@@ -89,8 +124,8 @@ hop単位のRTT/AS番号はW1時点ではメトリクス化せず、生JSONの�
 | ps.source | 192.168.1.104 | `.test.spec.source`優先、無ければ`.participants[0]` |
 | ps.destination | 192.168.1.101 | `.test.spec.dest` |
 | ps.test.type | latency | `.test.type` |
-| ps.tool | twping | pScheduler testの実行ツール（`.task.tool`等から取得） |
-| path.id | 未確定 | pSConfigのreference機能で付与予定。**手動taskではこのフィールド自体が存在しない**ため、W2でpSConfig本番化時に確定させる（PROJECT.md W2タスク参照） |
+| ps.tool | twping | **`.tool.name`**（実サンプルで確認。値は`{"name": "ping", "version": "1.0"}`の形）。`rtt`テストでは`ping`/`twping`のどちらかが入るため、LAN基準線がTWAMP由来かICMP由来かをこの属性で判別できる |
+| path.id | `.reference["path.id"]` | archiver封筒に**`reference`キーは実在する**（手動taskでは`null`）。pSConfigのreference機能がここを埋めるので、ブリッジは`.reference`を読み、無ければ属性を付けない実装とする。実際の値はW2のpSConfig本番化で確定 |
 
 ## エラー / 測定失敗runの扱い
 
@@ -128,3 +163,8 @@ rttテスト）:
 | latency-twamp-192.168.1.101-*.json | latency(twamp) | 正常系。max-clock-error要参照 |
 | trace-1.1.1.1-*.json | trace | 正常系 |
 | throughput-192.168.1.104-to-192.168.1.101-*.json | throughput | 正常系。95KBと大きい(intervals/diags含む) |
+| rtt-twping-192.168.1.101-*.taskoutput.json | rtt(twping) | LAN基準線。**`.taskoutput`サフィックス付きは`pscheduler task --format json`の出力で`result`部分のみ**。他のサンプルと違い`test`/`run`/`participants`/`reference`の封筒が無い |
+| rtt-twping-192.168.1.101-archiver.json | rtt(twping) | **上記の封筒付き実物**（2026-07-27、実 archiver がブリッジへ PUT したものを捕獲）。`.tool.name` が `twping`、ICMP版と違い `.test.spec.source` が存在する |
+
+> **封筒の構造**: archiver が PUT する JSON のトップレベルキーは
+> `['id', 'participants', 'reference', 'result', 'run', 'schedule', 'task', 'test', 'tool']`（実サンプルで確認）。

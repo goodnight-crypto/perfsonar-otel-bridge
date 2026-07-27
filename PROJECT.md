@@ -15,28 +15,39 @@ Zenn 記事投稿コンテスト「OpenTelemetryの知見を、記事にしよ�
 
 - perfSONAR の弱点（可視化・アラート・長期分析が古典的）を、OTel + Splunk で補完する構図
 - 記事の核となる成果物: **pScheduler HTTP archiver → OTLP 変換ブリッジ**（本リポジトリ。記事公開時に public 化）
-- 差別化要素: macOS 上で perfSONAR を正しく動かす知見 / RasPi のクロック制約を踏まえた twamp 主軸の測定設計 / tc netem 障害注入 → Detector 発火 → AI Assistant による調査、の一連のデモ
+- 差別化要素: macOS 上で perfSONAR を正しく動かす知見 / **仮想化ゲスト（Lima vz VM）のクロック精度限界を実測で切り分け、TWAMP を片道遅延ではなく two-way(RTT) で使う測定設計に到達した過程** / tc netem 障害注入 → Detector 発火 → AI Assistant による調査、の一連のデモ
 
 ### 測定マトリクス
 
 | パス | テスト | ツール | 間隔 | 狙い |
 |---|---|---|---|---|
-| Mac VM ↔ RasPi | RTT+ロス | twamp | 5分 | LAN 基準線。クロック非依存 |
+| Mac VM ↔ RasPi | RTT+ロス | `rtt` (`--tool twping`) | 5分 | **LAN 基準線**。TWAMP の two-way 測定なのでクロック非依存 |
+| Mac VM ↔ RasPi | 片道遅延 | `latency` (twamp) | 5分 | 参考値。`max-clock-error` 品質ゲートの実演材料 |
 | Mac VM ↔ RasPi | スループット | iperf3 | 6時間(深夜帯) | GbE 有線区間のスループット定点観測（実測929Mbps、理論値近傍。W1実施前は旧Pi/USB Ethernet由来の~300Mbps上限を想定していたが、Pi4BはPCIe直結GbEのためその制約は非該当と判明） |
-| Mac VM → 8091.info | RTT | rtt | 5分 | 自ブログのエッジ到達性 |
-| Mac VM → 1.1.1.1 | RTT+経路 | rtt / trace | 5分/30分 | ISP 品質の定点観測 |
-| RasPi 有線 vs 無線 | RTT+ロス | twamp | 5分 | Wi-Fi 品質比較（余力があれば） |
+| Mac VM → 8091.info | RTT | `rtt` (ping) | 5分 | 自ブログのエッジ到達性。対向に TWAMP responder が無いため ICMP |
+| Mac VM → 1.1.1.1 | RTT+経路 | `rtt` (ping) / `trace` | 5分/30分 | ISP 品質の定点観測。同上 |
+| RasPi 有線 vs 無線 | RTT+ロス | `rtt` (`--tool twping`) | 5分 | Wi-Fi 品質比較（余力があれば） |
+
+> **設計判断（W2 着手時に確定）**: LAN 区間の RTT は `latency`(twamp) ではなく **`rtt` テストを `--tool twping` で実行**して取得する。
+> pScheduler の `twping` ツールは `latency` と `rtt` の両テストに対応しており（`pscheduler plugins` で確認）、
+> `rtt` 側で実行すると ICMP ping 版と**完全に同一の JSON スキーマ**（`mean`/`min`/`max`/`stddev`/`loss`/`roundtrips[]`）で
+> クロック非依存の RTT が得られる。ブリッジの追加実装は不要。ICMP と違いレート制限・優先度低下の影響も受けない。
+> 詳細な経緯は docs/schema.md「rtt を twping で実行する場合」を参照。
 
 ### メトリクススキーマ（詳細: docs/schema.md）
 
 `perfsonar.rtt.mean/.max`（rttテスト） `perfsonar.twamp.delay.median/.mean`（twamp one-way delay、`ps.max_clock_error`で品質ゲート） `perfsonar.packet.loss.ratio` `perfsonar.throughput.bps` `perfsonar.trace.hops`
 共通 attributes: `ps.source` `ps.destination` `ps.test.type` `ps.tool` `path.id`
 
-> **設計判断（W1 Step3で判明）**: pSchedulerのtwamp(latency)テストはRTTを返さず、one-way delayが主指標。
-> 仮想化ゲスト(Lima VM)のクロック精度問題によりone-way delayが信頼できないケースがあるため、
-> 生JSONの`max-clock-error`フィールドをブリッジ側で見て、閾値超過時はone-way delayを欠測扱い
-> または品質フラグ付きで出力する。RTT/ロス率/スループットの主要SLO指標はこの問題の影響を受けない。
-> 詳細は experiments/w1-notes.md 参照。
+> **設計判断（W1 Step3 → W2着手時に更新）**: pSchedulerの`latency`(twamp)テストはRTTを返さず、one-way delayが主指標。
+> 仮想化ゲスト(Lima VM)のクロック精度問題によりone-way delayが信頼できないため、**LAN基準線のRTTは
+> `rtt`テストを`--tool twping`で実行して取得する**（上記マトリクス参照）。`latency`テストは参考値に降格し、
+> 生JSONの`max-clock-error`をブリッジ側で見て閾値超過時は欠測扱いにする。
+>
+> ただし**この品質ゲートには偽陰性の実例がある**: `max-clock-error`が0.0msと報告されながら片道遅延が
+> 中央値-4.62ms/最小-23.92msと壊れていたケースを実測済み（experiments/w1-notes.md:42）。
+> ゲートは「壊れたデータを完全に排除する仕組み」ではなく「明らかに壊れた区間を落とすベストエフォート」
+> として扱い、この限界を記事にも明記する。RTT/ロス率/スループットの主要SLO指標はこの問題の影響を受けない。
 
 ## ロードマップ
 
@@ -54,6 +65,8 @@ Zenn 記事投稿コンテスト「OpenTelemetryの知見を、記事にしよ�
 - [ ] Splunk ダッシュボード構築（path.id 別 RTT / ロス / スループット）
 - [ ] Detector 3 種（ロス静的閾値 / RTT 異常検知 / スループット劣化）
 - [ ] 実験: tc netem で遅延 100ms・ロス 3% 注入 → Detector 発火 → AI Assistant に原因調査させ記録
+      - 注入の前後で `chronyc tracking` の Skew/Frequency を必ず記録する。これを省くと観測された遅延増が
+        注入起因かVMクロックのステップ補正起因か区別できず、デモの信頼性が崩れる
 
 ### W3（〜8/9）執筆と公開
 - [ ] Zenn 記事執筆（構成案は下記）・スクショ整理
