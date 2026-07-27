@@ -87,3 +87,12 @@
   - `rtt-1.1.1.1-*.json` (4.5KB), `rtt-8091.info-*.json` (4.7KB), `latency-twamp-192.168.1.101-*.json` (5.9KB), `trace-1.1.1.1-*.json` (3.3KB), `throughput-192.168.1.104-to-192.168.1.101-*.json` (95KB、iperf3の秒間ストリーム統計を含むため大きい)
   - 共通のトップレベル構造: `id, schedule, test, tool, run, task, participants, result, reference`
 - 判断・回避策: Step5でこれらのJSONを読み込み、docs/schema.mdのJSONPath・OTelメトリクスマッピング表を確定させる
+
+## Step 5: スキーマ確定
+- 日付: 2026-07-27
+- やったこと: docs/samples/の実JSONを精査してdocs/schema.mdを確定版に更新。エラーrunの形状確認のため、到達不能なIP(192.0.2.1, TEST-NET-1)へのrttテストを追加実行してサンプル取得
+- 発見①: **rtt/traceテストのJSONには`test.spec.source`が存在しない**（送信元は`.participants[0]`が暗黙）。一方latency/throughputには`source`が明示される。ブリッジのps.source属性はこの違いを吸収する必要がある
+- 発見②: **twamp(latency)テストの結果JSONに`mean`/`median`等の直接フィールドが無い**。`histogram-latency`というヒストグラム（`{"<delay_ms>": count}`）のみが提供され、代表値はブリッジ側で計算する必要がある
+- 発見③: **ロス100%でも`succeeded: true`のまま**。`mean`/`min`/`max`/`stddev`等の統計フィールドは値がnullになるのではなく**キーごと省略される**（プレーンテキスト表示では"None"と出るためJSON側も同様だと誤解しやすい）。ブリッジは遅延系メトリクスについてキーの存在チェックを行う必要がある
+- 発見④: throughputの結果JSONは`.result.diags`にiperf3の生テキスト出力全体を、`.result.intervals[]`に秒間の詳細統計を含むため95KBと大きい。ブリッジで使うのは`.result.summary.summary`の集計値のみで十分。intervals/diagsは転送不要
+- 判断・回避策: 上記をすべてdocs/schema.mdに反映。`path.id`（pSConfigのreference機能で付与予定）は手動taskのJSONには存在しないため、W2のpSConfig本番化時まで確定を持ち越し。真の「タスク失敗」(`succeeded: false`)のサンプルは今回未取得のためW2で必要になった時点で追加取得する方針とした

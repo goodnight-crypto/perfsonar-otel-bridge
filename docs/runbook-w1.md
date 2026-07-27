@@ -134,4 +134,4 @@ pscheduler task --archive=@/tmp/archive.json throughput --source <vm-ip> --dest 
 - [x] RasPi・Mac VM 両方で testpoint が稼働、`pscheduler troubleshoot` OK
 - [x] 4 テスト種の手動疎通 OK
 - [x] 4 テスト種の archiver JSON サンプル取得済み
-- [ ] docs/schema.md 初版確定（ブリッジ実装に着手できる状態）
+- [x] docs/schema.md 初版確定（ブリッジ実装に着手できる状態）
