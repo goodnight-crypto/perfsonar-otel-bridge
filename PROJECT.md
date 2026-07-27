@@ -29,8 +29,14 @@ Zenn 記事投稿コンテスト「OpenTelemetryの知見を、記事にしよ�
 
 ### メトリクススキーマ（詳細: docs/schema.md）
 
-`perfsonar.twamp.rtt.mean/.max` `perfsonar.packet.loss.ratio` `perfsonar.throughput.bps` `perfsonar.trace.hops`
+`perfsonar.rtt.mean/.max`（rttテスト） `perfsonar.twamp.delay.median/.mean`（twamp one-way delay、`ps.max_clock_error`で品質ゲート） `perfsonar.packet.loss.ratio` `perfsonar.throughput.bps` `perfsonar.trace.hops`
 共通 attributes: `ps.source` `ps.destination` `ps.test.type` `ps.tool` `path.id`
+
+> **設計判断（W1 Step3で判明）**: pSchedulerのtwamp(latency)テストはRTTを返さず、one-way delayが主指標。
+> 仮想化ゲスト(Lima VM)のクロック精度問題によりone-way delayが信頼できないケースがあるため、
+> 生JSONの`max-clock-error`フィールドをブリッジ側で見て、閾値超過時はone-way delayを欠測扱い
+> または品質フラグ付きで出力する。RTT/ロス率/スループットの主要SLO指標はこの問題の影響を受けない。
+> 詳細は experiments/w1-notes.md 参照。
 
 ## ロードマップ
 
