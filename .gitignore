@@ -1,4 +1,12 @@
 .env
+# .env の派生（.env.local 等）とエディタの swap ファイル。
+# swap には編集中のトークンが残りうるため .env と同じ扱いで除外する
+.env.*
+!.env.example
+*.swp
+*.swo
+*~
+
 __pycache__/
 *.pyc
 .DS_Store
