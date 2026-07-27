@@ -23,7 +23,7 @@ Zenn 記事投稿コンテスト「OpenTelemetryの知見を、記事にしよ�
 |---|---|---|---|---|
 | Mac VM ↔ RasPi | RTT+ロス | `rtt` (`--tool twping`) | 5分 | **LAN 基準線**。TWAMP の two-way 測定なのでクロック非依存 |
 | Mac VM ↔ RasPi | 片道遅延 | `latency` (twamp) | 5分 | 参考値。`max-clock-error` 品質ゲートの実演材料 |
-| Mac VM ↔ RasPi | スループット | iperf3 | 6時間(深夜帯) | GbE 有線区間のスループット定点観測（実測929Mbps、理論値近傍。W1実施前は旧Pi/USB Ethernet由来の~300Mbps上限を想定していたが、Pi4BはPCIe直結GbEのためその制約は非該当と判明） |
+| Mac VM ↔ RasPi | スループット | iperf3 | **1日1回 03:00 JST** | GbE 有線区間のスループット定点観測（実測929Mbps、理論値近傍。W1実施前は旧Pi/USB Ethernet由来の~300Mbps上限を想定していたが、Pi4BはPCIe直結GbEのためその制約は非該当と判明） |
 | Mac VM → 8091.info | RTT | `rtt` (ping) | 5分 | 自ブログのエッジ到達性。対向に TWAMP responder が無いため ICMP |
 | Mac VM → 1.1.1.1 | RTT+経路 | `rtt` (ping) / `trace` | 5分/30分 | ISP 品質の定点観測。同上 |
 | RasPi 有線 vs 無線 | RTT+ロス | `rtt` (`--tool twping`) | 5分 | Wi-Fi 品質比較（余力があれば） |
@@ -33,6 +33,13 @@ Zenn 記事投稿コンテスト「OpenTelemetryの知見を、記事にしよ�
 > `rtt` 側で実行すると ICMP ping 版と**完全に同一の JSON スキーマ**（`mean`/`min`/`max`/`stddev`/`loss`/`roundtrips[]`）で
 > クロック非依存の RTT が得られる。ブリッジの追加実装は不要。ICMP と違いレート制限・優先度低下の影響も受けない。
 > 詳細な経緯は docs/schema.md「rtt を twping で実行する場合」を参照。
+
+> **iperf3 の実行頻度を「6時間ごと」から「1日1回 03:00 JST」に変更（W2 pSConfig 本番化時）**:
+> pSConfig の schedule は `repeat-cron` に対応せず（`ScheduleSpecification` は
+> `start`/`repeat`/`slip`/`sliprand`/`until`/`max-runs` のみ、`additionalProperties: false`）、
+> 「6時間ごと、ただし深夜帯だけ」を表現できない。6時間間隔にすると日中も走り CLAUDE.md 規約2に反する。
+> 絶対時刻の `start`（18:00Z = 翌03:00 JST）+ `repeat: P1D` + `slip: PT30M` とし、
+> 最遅でも 03:30 JST に収まることを pScheduler 上で実測確認済み。
 
 ### メトリクススキーマ（詳細: docs/schema.md）
 
@@ -59,9 +66,9 @@ Zenn 記事投稿コンテスト「OpenTelemetryの知見を、記事にしよ�
 - [x] HTTP archiver の生 JSON をダンプ → docs/samples/ に保存、schema.md 初版確定
 
 ### W2（〜8/2）パイプライン構築と実験
-- [ ] bridge 実装（FastAPI: /archive 受信 → OTLP push）+ 単体テスト
-- [ ] OTel Collector 設定 → Splunk 疎通、メトリクス着弾確認
-- [ ] pSConfig テンプレート本番化（全パス・スケジュール定義）
+- [x] bridge 実装（FastAPI: /archive 受信 → OTLP push）+ 単体テスト
+- [x] OTel Collector 設定 → Splunk 疎通、メトリクス着弾確認
+- [x] pSConfig テンプレート本番化（全パス・スケジュール定義）※VM 6タスク / RasPi 3タスク稼働中
 - [ ] Splunk ダッシュボード構築（path.id 別 RTT / ロス / スループット）
 - [ ] Detector 3 種（ロス静的閾値 / RTT 異常検知 / スループット劣化）
 - [ ] 実験: tc netem で遅延 100ms・ロス 3% 注入 → Detector 発火 → AI Assistant に原因調査させ記録

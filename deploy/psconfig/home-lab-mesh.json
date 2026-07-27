@@ -1,0 +1,149 @@
+{
+  "_meta": {
+    "display-name": "home-lab-mesh",
+    "description": "自宅ラボの定点観測。測定マトリクスの正は PROJECT.md、メトリクス変換仕様は docs/schema.md"
+  },
+
+  "addresses": {
+    "vm":         { "address": "192.168.1.104", "_meta": { "display-name": "Mac 上の Lima VM" } },
+    "raspi":      { "address": "192.168.1.101", "_meta": { "display-name": "Raspberry Pi 4B（有線）" } },
+    "cloudflare": { "address": "1.1.1.1",       "_meta": { "display-name": "1.1.1.1（ISP 品質の基準点）" } },
+    "blog":       { "address": "8091.info",     "_meta": { "display-name": "自ブログのエッジ" } }
+  },
+
+  "groups": {
+    "lan-pair": {
+      "type": "mesh",
+      "addresses": [ { "name": "vm" }, { "name": "raspi" } ]
+    },
+    "wan-cloudflare": {
+      "type": "disjoint",
+      "a-addresses": [ { "name": "vm" } ],
+      "b-addresses": [ { "name": "cloudflare" } ]
+    },
+    "wan-blog": {
+      "type": "disjoint",
+      "a-addresses": [ { "name": "vm" } ],
+      "b-addresses": [ { "name": "blog" } ]
+    }
+  },
+
+  "tests": {
+    "lan-rtt": {
+      "type": "rtt",
+      "spec": {
+        "source": "{% address[0] %}",
+        "dest": "{% address[1] %}",
+        "count": 20
+      }
+    },
+    "lan-owd": {
+      "_meta": {
+        "note": "protocol は latency spec の schema v4 でのみ定義される。schema を省略すると v1 が使われ 'protocol was unexpected' で validate に落ちる"
+      },
+      "type": "latency",
+      "spec": {
+        "schema": 4,
+        "source": "{% address[0] %}",
+        "dest": "{% address[1] %}",
+        "protocol": "twamp"
+      }
+    },
+    "lan-throughput": {
+      "type": "throughput",
+      "spec": {
+        "source": "{% address[0] %}",
+        "dest": "{% address[1] %}",
+        "duration": "PT20S"
+      }
+    },
+    "wan-rtt": {
+      "type": "rtt",
+      "spec": {
+        "dest": "{% address[1] %}",
+        "count": 10
+      }
+    },
+    "wan-trace": {
+      "type": "trace",
+      "spec": {
+        "dest": "{% address[1] %}"
+      }
+    }
+  },
+
+  "schedules": {
+    "every-5min":  { "repeat": "PT5M",  "slip": "PT2M", "sliprand": true },
+    "every-30min": { "repeat": "PT30M", "slip": "PT5M", "sliprand": true },
+    "nightly-0300jst": {
+      "_meta": {
+        "note": "pSConfig の schedule は repeat-cron に対応しないため、絶対時刻の start + P1D で時刻を固定する。18:00Z = 翌 03:00 JST。slip を 30 分に抑え、規約の 02:00-06:00 JST から出ないようにしている"
+      },
+      "start": "2026-07-27T18:00:00Z",
+      "repeat": "P1D",
+      "slip": "PT30M",
+      "sliprand": true
+    }
+  },
+
+  "archives": {
+    "otel-bridge": {
+      "archiver": "http",
+      "data": {
+        "_url": "http://192.168.0.1:8088/archive",
+        "op": "put"
+      }
+    }
+  },
+
+  "tasks": {
+    "lan-rtt-task": {
+      "group": "lan-pair",
+      "test": "lan-rtt",
+      "schedule": "every-5min",
+      "tools": [ "twping" ],
+      "archives": [ "otel-bridge" ],
+      "reference": { "path.id": "lan-wired" }
+    },
+    "lan-owd-task": {
+      "group": "lan-pair",
+      "test": "lan-owd",
+      "schedule": "every-5min",
+      "tools": [ "twping" ],
+      "archives": [ "otel-bridge" ],
+      "reference": { "path.id": "lan-wired" }
+    },
+    "lan-throughput-task": {
+      "group": "lan-pair",
+      "test": "lan-throughput",
+      "schedule": "nightly-0300jst",
+      "tools": [ "iperf3" ],
+      "archives": [ "otel-bridge" ],
+      "reference": { "path.id": "lan-wired" }
+    },
+    "wan-cloudflare-rtt-task": {
+      "group": "wan-cloudflare",
+      "test": "wan-rtt",
+      "schedule": "every-5min",
+      "tools": [ "ping" ],
+      "archives": [ "otel-bridge" ],
+      "reference": { "path.id": "wan-cloudflare" }
+    },
+    "wan-cloudflare-trace-task": {
+      "group": "wan-cloudflare",
+      "test": "wan-trace",
+      "schedule": "every-30min",
+      "tools": [ "traceroute" ],
+      "archives": [ "otel-bridge" ],
+      "reference": { "path.id": "wan-cloudflare" }
+    },
+    "wan-blog-rtt-task": {
+      "group": "wan-blog",
+      "test": "wan-rtt",
+      "schedule": "every-5min",
+      "tools": [ "ping" ],
+      "archives": [ "otel-bridge" ],
+      "reference": { "path.id": "wan-blog" }
+    }
+  }
+}

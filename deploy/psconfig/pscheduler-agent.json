@@ -1,0 +1,7 @@
+{
+  "remotes": [
+    {
+      "url": "/etc/perfsonar/psconfig/home-lab-mesh.json"
+    }
+  ]
+}
