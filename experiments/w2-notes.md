@@ -162,4 +162,48 @@ two-way jitter は捨てられ、`histogram-latency`（片道）しか JSON に�
     `${SPLUNK_ACCESS_TOKEN:?}` でシェル環境から補間する。起動前に
     `set -a; . ./.env; set +a` が必須で、忘れると compose がエラーで止まる（黙って 401 にならない）。
   - **未実施**: RasPi 側 testpoint からの archiver 経路は未確認（VM からのみ確認）。
-    pSConfig 本番化で両方向を通す。
+    pSConfig 本番化で両方向を通す。→ **Step 4 で解消**。
+
+## Step 4: pSConfig 本番化
+
+- 日付: 2026-07-27
+- やったこと: `deploy/psconfig/home-lab-mesh.json` を本番定義として書き、VM と RasPi の両方に配置。
+- 結果 / エラー:
+  - **エージェントが 7/26 からクラッシュループしていたことが判明。** `run-testpoint.sh` はホストの
+    `~/psconfig` を `/etc/perfsonar/psconfig` にマウントするが、**ホスト側が空だとイメージ既定の
+    `pscheduler-agent.json` と `pscheduler-agent-logger.conf` が隠れる**。エージェントは設定を
+    見つけられず `status=1/FAILURE` で再起動を繰り返していた（RasPi 側の再起動カウンタは 3354）。
+    W1 では手動 task しか使っていなかったため気付かなかった。
+    → 既定ファイルをイメージから取り出して `deploy/psconfig/` に取り込み、両ノードに配置して解消。
+  - **`psconfig validate` が実エラーを2件捕まえた:**
+    1. `latency` の spec に `protocol` を書くと `Additional properties are not allowed
+       ('protocol' was unexpected)`。**`"schema": 4` が必須**だった。`validate.py:490` が
+       `"$ref": "#/local/v%s" % json.get("schema", 1)` で、省略すると v1 が使われる。
+       `protocol` は v4 でしか定義されていない。手動 task の実サンプルには `schema: 4` が
+       入っていたが、テンプレートに書き写す際に落としていた。
+    2. `psconfig remote add` は URL を `--quiet` より先に置かないと `unrecognized arguments`。
+  - **pSConfig の schedule は `repeat-cron` に非対応。** pScheduler 単体は `--repeat-cron` を持つが、
+    pSConfig の `ScheduleSpecification` は `start`/`repeat`/`slip`/`sliprand`/`until`/`max-runs` のみで
+    `additionalProperties: False`。「6時間ごと、ただし深夜帯だけ」が表現できないため、
+    iperf3 は絶対時刻 `start: 2026-07-27T18:00:00Z`（= 翌 03:00 JST）+ `repeat: P1D` +
+    `slip: PT30M` とした。pScheduler 上で **03:00 JST 開始・最遅 03:30 JST** を実測確認し、
+    CLAUDE.md 規約2（02:00-06:00 JST）を満たすことを確定。
+  - **`path.id` が確定した（W1 からの持ち越し課題）。** タスク定義だけでなく、実際に archiver が
+    送る封筒に `"reference": {"path.id": "lan-wired"}` が乗ることを捕獲して確認。ブリッジが
+    3メトリクスすべてに `path.id` 属性を付けることも実データで検証済み。
+    なお pSConfig 経由だと `reference` には `psconfig.created-by`（uuid / agent-hostname）も
+    同時に入るが、ブリッジは `path.id` キーのみ見るので影響しない。
+  - **生成タスク: VM 6 / RasPi 3。** mesh グループが LAN を双方向に展開し、WAN タスクは
+    a-address が `vm` のため RasPi 側では正しくスキップされた。
+    - VM: rtt/twping・latency/twping・throughput/iperf3（→RasPi）、rtt/ping ×2・trace（→WAN）
+    - RasPi: rtt/twping・latency/twping・throughput/iperf3（→VM）
+  - **両ノードからブリッジへの流入を確認。** Collector 13 → 21（+8メトリクス）、
+    PUT 3 → 7（+4アーカイブ）。rtt が3メトリクス、latency が1メトリクス（遅延はクロックゲートで
+    落ちる）で計算が合う。拒否0・失敗0・エラーログ0行。
+- 判断・回避策:
+  - **コンテナは作り直していない。** `/etc/perfsonar/psconfig` はホストのバインドマウントなので、
+    ファイルを配ってエージェントを `systemctl restart` するだけで反映される（規約4の
+    「stop で state が消える」問題を回避）。
+  - pSConfig エージェントは初回巡回を終えるまで `psconfig pscheduler-tasks` が
+    `Unable to find last guid ...` を返す。RasPi では 20 秒ほどかかった。落ちているのと
+    区別しづらいので、判断は `systemctl is-active` とログの両方で行うこと。
