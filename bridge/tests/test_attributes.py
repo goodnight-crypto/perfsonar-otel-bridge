@@ -39,6 +39,17 @@ def test_path_id_is_absent_when_reference_is_null(sample):
     assert "path.id" not in a
 
 
+def test_each_metric_gets_its_own_attributes_dict(sample):
+    # 同一 dict を共有していると、将来メトリクスごとに属性を出し分けたとき
+    # 1箇所の変更が同じ封筒の全メトリクスへ波及する
+    metrics = convert(sample("rtt-1.1.1.1-"))
+    assert len(metrics) > 1
+
+    metrics[0].attributes["injected"] = "x"
+
+    assert "injected" not in metrics[1].attributes
+
+
 def test_path_id_is_taken_from_reference_when_present():
     envelope = {
         "test": {"type": "rtt", "spec": {"dest": "192.168.1.101"}},
