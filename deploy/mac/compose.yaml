@@ -5,6 +5,18 @@
 #
 #   set -a; . ../../.env; set +a
 #   docker compose -f deploy/mac/compose.yaml up -d
+
+# Docker の json-file ドライバは既定で上限が無く、コンテナログが際限なく増える。
+# 平常時のブリッジは 1 アーカイブ 1 行で日に 100KB 未満だが、危険なのは異常時。
+# W2 Step 1 で踏んだ 401 ループのようにエクスポート失敗が続くと、Collector が
+# 1リクエストごとに複数行のエラーを吐いて日に数百MBになりうる。
+# 1コンテナあたり最大 30MB で頭打ちにする（直近30MBは障害調査に残る）。
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   bridge:
     build: ../../bridge
@@ -19,6 +31,7 @@ services:
     depends_on:
       - collector
     restart: unless-stopped
+    logging: *default-logging
 
   collector:
     image: otel/opentelemetry-collector-contrib:0.157.0
@@ -32,3 +45,4 @@ services:
     ports:
       - "4318:4318"
     restart: unless-stopped
+    logging: *default-logging

@@ -409,3 +409,44 @@ Collector のカウンタは 2500件送信・失敗0 と健全そのものを示
 dimension になるので、**attribute に何を置くかがコスト構造と可視化可能性を直接決める**。
 「変わる数値は metric、変わらない識別子は attribute」という原則を、
 269系列という実測値付きで書ける。
+
+## Step 9: ログによるディスク圧迫の点検
+
+- 日付: 2026-07-28
+- やったこと: 過去の perfSONAR 運用でログがディスクを圧迫した経験があるとのことで、
+  現構成のログ増加を実測で点検した。
+- 結果 / エラー:
+  - **perfSONAR 側（VM / RasPi）は testpoint イメージ側で対策済みだった。**
+    - `logrotate.timer` が稼働（点検時点で4時間前に実行、次回19時間後）
+    - `/etc/logrotate.d/` に `pscheduler-server` `rsyslog` `apache2` `postgresql-common` 等
+    - `lsregistrationdaemon.log` が `.1` `.2` と世代管理されており、実際に回っている
+    - pSConfig エージェントのログは Python の `RotatingFileHandler` で **16MB × 7世代**の上限
+      （`deploy/psconfig/pscheduler-agent-logger.conf`。リポジトリにコミット済み）
+    - 実測: コンテナ内 `/var/log` 合計 **19MB**（2日稼働）。syslog 6.3MB / messages 6.1MB /
+      apache2 3.1MB / perfSONAR 関連 572KB
+  - ディスク余裕: VM 4.6G/96G (5%)、**RasPi 9.0G/30G (33%、`/dev/mmcblk0p2` = SDカード)**。
+    RasPi が構造的に一番弱いが、19G空きとローテートが効いており当面問題なし。
+  - pScheduler DB: 15MB、run 1328件、2.5日分。デーモン設定は全てデフォルト（空）で
+    pScheduler 本来の内部メンテナンスに任せる形。**まだ purge が働くほど古くなっていないだけ**
+    なので、1週間後に再度サイズを見て頭打ちになるか確認すること。
+  - **問題: Mac 側の compose に上限が無かった（自分で作り込んだ欠陥）。**
+    `psotel-bridge` / `psotel-collector` とも json-file ドライバで
+    `max-size` / `max-file` 未設定。`~/.docker/daemon.json` にも既定の `log-opts` 無し。
+    実測サイズは 8.9KB / 1.9KB と小さかったが上限が無い。
+- 判断・回避策:
+  - `deploy/mac/compose.yaml` に YAML アンカーで `max-size: 10m` / `max-file: 3` を両サービスへ適用。
+    1コンテナ最大30MBで頭打ち。直近30MBは残るので障害調査には足りる。
+  - **危険なのは平常時ではなく異常時**という点を設定にコメントで残した。
+    ブリッジは平常時 1アーカイブ1行で日に100KB未満だが、W2 Step 1 の 401 ループのように
+    エクスポート失敗が続くと Collector が1リクエストごとに複数行のエラーを吐く。
+    今回入れた「変換失敗を例外ログに残す」修正も、pScheduler の JSON 形状が変われば
+    全リクエストで発火するので同じ性質を持つ。
+  - 適用後の確認: 両コンテナに `max-file:3 max-size:10m` が入り、
+    PUT 4件・エラー0行・拒否0でパイプラインは正常。
+
+### 記事ネタ
+
+自宅ラボや小規模構成では「動いた」で終わりがちだが、**定点観測は動き続けることが前提**なので
+ログとDBの増加は最初に潰しておく箇所。perfSONAR 公式イメージは logrotate まで
+面倒を見てくれている一方、**自分で足した compose の側に穴があった**という対比が書ける。
+RasPi は SD カードなので特に効く話。
