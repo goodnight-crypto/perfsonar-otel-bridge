@@ -64,13 +64,10 @@ def build_attributes(envelope: dict) -> dict[str, str]:
     reference = envelope.get("reference") or {}
     if "path.id" in reference:
         attributes["path.id"] = reference["path.id"]
-    result = envelope["result"]
-    # TWAMP が埋めるクロック誤差見積もり。ゲートで落とした理由を追えるよう属性に残す
-    if "max-clock-error" in result:
-        attributes["ps.max_clock_error"] = str(result["max-clock-error"])
-    retransmits = result.get("summary", {}).get("summary", {}).get("retransmits")
-    if retransmits is not None:
-        attributes["ps.retransmits"] = str(retransmits)
+    # 測定ごとに値が変わる数値（max-clock-error / retransmits）は attribute にしない。
+    # Splunk は dimension の組み合わせごとに時系列を作るため、値が変わるたびに
+    # 新しい時系列が生まれて際限なく増える。実際 packet.loss.ratio が1日で269系列に
+    # 膨らんだ（experiments/w2-notes.md Step 8）。これらは Gauge メトリクスとして出す
     return attributes
 
 
@@ -124,6 +121,8 @@ def convert(envelope: dict) -> list[Metric]:
         # 提供できないと Multiplier が 0 のまま埋まる実装がある。実際 w1-notes.md:42 に
         # 0.0 報告なのに片道遅延が中央値 -4.62ms と壊れていた例がある
         clock_error = result["max-clock-error"]
+        # 遅延がゲートで落ちた理由を追えるよう、誤差そのものを時系列として残す
+        add("perfsonar.twamp.clock_error", clock_error, "ms")
         median = weighted_median(result["histogram-latency"])
         # 自己申告のクロック誤差は当てにならないので、値そのものの妥当性も見る。
         # 負の片道遅延は物理的にありえず、LAN で数十msも同様
@@ -135,7 +134,10 @@ def convert(envelope: dict) -> list[Metric]:
 
     elif test_type == "throughput":
         # intervals[] と diags は変換しない（サイズが大きく集計値のみで足りる）
-        add("perfsonar.throughput.bps", result["summary"]["summary"]["receiver-throughput-bits"], "bit/s")
+        summary = result["summary"]["summary"]
+        add("perfsonar.throughput.bps", summary["receiver-throughput-bits"], "bit/s")
+        if summary.get("retransmits") is not None:
+            add("perfsonar.throughput.retransmits", summary["retransmits"], "{retransmits}")
 
     else:
         # 黙って捨てると測定が消えたことに誰も気付けない

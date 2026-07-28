@@ -95,9 +95,12 @@ def test_malformed_envelope_is_not_emitted(sample):
 
 
 def test_throughput_intervals_are_not_emitted_as_metrics(sample):
-    # 95KB の intervals[] を取り込まないことの確認
+    # 95KB の intervals[] を取り込まないことの確認。集計値の2つだけが出る
     client, recorder = client_with_recorder()
 
     client.put("/archive", json=sample("throughput-192.168.1.104-"))
 
-    assert [m.name for m in recorder.batches[0]] == ["perfsonar.throughput.bps"]
+    assert [m.name for m in recorder.batches[0]] == [
+        "perfsonar.throughput.bps",
+        "perfsonar.throughput.retransmits",
+    ]

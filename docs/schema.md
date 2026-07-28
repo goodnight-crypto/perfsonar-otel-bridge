@@ -74,7 +74,7 @@ VM側クロック精度問題により、このone-way delayは`max-clock-error`
 |---|---|---|---|
 | perfsonar.twamp.delay.median | Gauge | ms | `.result.histogram-latency` から算出 |
 | perfsonar.packet.loss.ratio | Gauge | 1 (0.0-1.0) | `.result.packets-lost / .result.packets-sent` |
-| （属性）ps.max_clock_error | attribute | ms | `.result.max-clock-error`。**閾値超過時はdelayメトリクスを欠測扱いにする品質ゲートとして使う** |
+| perfsonar.twamp.clock_error | Gauge | ms | `.result.max-clock-error`。**品質ゲートの判定に使う値。遅延が欠測した理由を追えるよう、ゲートで落とした場合も必ず出力する** |
 
 **品質ゲートの限界（実測済みの偽陰性）**: `max-clock-error` は TWAMP 両端の**自己申告の推定値**であり、
 実態と乖離することがある。experiments/w1-notes.md:42 に、RasPi→VM 方向で片道遅延が
@@ -150,7 +150,7 @@ hop単位のRTT/AS番号はW1時点ではメトリクス化せず、生JSONの�
 | メトリクス | 型 | 単位 | JSONPath |
 |---|---|---|---|
 | perfsonar.throughput.bps | Gauge | bit/s | `.result.summary.summary.receiver-throughput-bits` |
-| （属性）ps.retransmits | attribute | count | `.result.summary.summary.retransmits` |
+| perfsonar.throughput.retransmits | Gauge | {retransmits} | `.result.summary.summary.retransmits` |
 
 **ブリッジ実装上の注意**: `.result.intervals[]`と`.result.diags`はOTelメトリクスに変換せず無視する（サイズが大きく、集計値のみで十分）。
 
@@ -162,6 +162,18 @@ hop単位のRTT/AS番号はW1時点ではメトリクス化せず、生JSONの�
 | ps.destination | 192.168.1.101 | `.test.spec.dest` |
 | ps.test.type | latency | `.test.type` |
 | ps.tool | twping | **`.tool.name`**（実サンプルで確認。値は`{"name": "ping", "version": "1.0"}`の形）。`rtt`テストでは`ping`/`twping`のどちらかが入るため、LAN基準線がTWAMP由来かICMP由来かをこの属性で判別できる |
+
+> **測定ごとに変わる数値を attribute にしないこと。** Splunk は dimension の組み合わせごとに
+> 別々の時系列（MTS）を作るため、値が変わるたびに新しい時系列が生まれて際限なく増える。
+> 当初 `ps.max_clock_error` と `ps.retransmits` を attribute にしていたところ、
+> **1日で `perfsonar.packet.loss.ratio` が 269 系列、`perfsonar.twamp.delay.median` が 64 系列**に
+> 膨らんだ（本来はそれぞれ数系列）。Free Edition の枠を圧迫するうえ、
+> 「`path.id` 別にロス率を表示」しようとすると 269 本の線が引かれてダッシュボードが成立しない。
+> **この2つは Gauge メトリクスに移した**（`perfsonar.twamp.clock_error` /
+> `perfsonar.throughput.retransmits`）。attribute に置いてよいのは値域が有限で安定した識別子だけ。
+>
+> この欠陥は Collector のカウンタからもブリッジのテストからも見えず、Splunk の
+> `/v2/metrictimeseries` を API で覗いて初めて判明した（experiments/w2-notes.md Step 8）。
 | path.id | `.reference["path.id"]` | archiver封筒に**`reference`キーは実在する**（手動taskでは`null`）。pSConfigのreference機能がここを埋めるので、ブリッジは`.reference`を読み、無ければ属性を付けない実装とする。実際の値はW2のpSConfig本番化で確定 |
 
 ## エラー / 測定失敗runの扱い

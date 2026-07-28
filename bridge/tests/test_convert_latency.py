@@ -113,7 +113,26 @@ def test_plausible_delay_still_passes_both_gates():
     assert find(convert(envelope), "perfsonar.twamp.delay.median").value == 2.5
 
 
-def test_max_clock_error_is_exposed_as_attribute(sample):
+def test_clock_error_is_emitted_as_a_metric(sample):
+    # 測定ごとに変わる数値を dimension にすると、値が変わるたびに新しい時系列が作られる。
+    # 実際 packet.loss.ratio が1日で269系列に膨らんだ（experiments/w2-notes.md Step 8）
     metrics = convert(sample("latency-twamp-192.168.1.101-"))
 
-    assert find(metrics, "perfsonar.packet.loss.ratio").attributes["ps.max_clock_error"] == "27.47"
+    m = find(metrics, "perfsonar.twamp.clock_error")
+    assert m.value == 27.47
+    assert m.unit == "ms"
+
+
+def test_clock_error_is_not_a_dimension(sample):
+    metrics = convert(sample("latency-twamp-192.168.1.101-"))
+
+    for m in metrics:
+        assert "ps.max_clock_error" not in m.attributes
+
+
+def test_clock_error_is_emitted_even_when_the_delay_is_gated(sample):
+    # 実サンプルは 27.47ms でゲートされる。なぜ欠測したかを追えるよう誤差自体は残す
+    metrics = convert(sample("latency-twamp-192.168.1.101-"))
+
+    assert "perfsonar.twamp.delay.median" not in names(metrics)
+    assert "perfsonar.twamp.clock_error" in names(metrics)

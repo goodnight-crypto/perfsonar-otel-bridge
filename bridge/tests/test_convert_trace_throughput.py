@@ -24,7 +24,17 @@ def test_throughput_uses_receiver_side_bits(sample):
     assert m.unit == "bit/s"
 
 
-def test_throughput_exposes_retransmits_as_attribute(sample):
+def test_retransmits_is_emitted_as_a_metric(sample):
+    # 再送数も測定ごとに変わるため dimension にすると時系列が増え続ける
     metrics = convert(sample("throughput-192.168.1.104-"))
 
-    assert find(metrics, "perfsonar.throughput.bps").attributes["ps.retransmits"] == "7"
+    m = find(metrics, "perfsonar.throughput.retransmits")
+    assert m.value == 7
+    assert m.unit == "{retransmits}"
+
+
+def test_retransmits_is_not_a_dimension(sample):
+    metrics = convert(sample("throughput-192.168.1.104-"))
+
+    for m in metrics:
+        assert "ps.retransmits" not in m.attributes
