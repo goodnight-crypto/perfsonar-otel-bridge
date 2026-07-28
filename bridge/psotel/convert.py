@@ -18,6 +18,17 @@ logger = logging.getLogger(__name__)
 # 10.0 へ引き上げた。異常サンプルは n=1 なので、これは検証済みの境界ではなく発見的な値。
 CLOCK_ERROR_THRESHOLD_MS = 10.0
 
+# 片道遅延の値そのものに対する妥当性の上限（ms）。
+#
+# max-clock-error のゲートだけでは不十分だと実測で判明したため追加した。
+# 誤差 0.23ms と自己申告しながら片道遅延 102ms を返す run が実在し、
+# ゲートを通過した約55件のうち少なくとも15件が物理的にありえない値だった
+# （experiments/w2-notes.md Step 5-2）。
+#
+# この上限は home-lab-mesh.json の LAN ペア（RTT 約0.9ms）を前提にしている。
+# WAN 区間で latency テストを使う場合は経路に応じた値に変える必要がある。
+DELAY_CEILING_MS = 50.0
+
 
 @dataclass(frozen=True)
 class Metric:
@@ -113,8 +124,11 @@ def convert(envelope: dict) -> list[Metric]:
         # 提供できないと Multiplier が 0 のまま埋まる実装がある。実際 w1-notes.md:42 に
         # 0.0 報告なのに片道遅延が中央値 -4.62ms と壊れていた例がある
         clock_error = result["max-clock-error"]
-        if 0 < clock_error <= CLOCK_ERROR_THRESHOLD_MS:
-            add("perfsonar.twamp.delay.median", weighted_median(result["histogram-latency"]), "ms")
+        median = weighted_median(result["histogram-latency"])
+        # 自己申告のクロック誤差は当てにならないので、値そのものの妥当性も見る。
+        # 負の片道遅延は物理的にありえず、LAN で数十msも同様
+        if 0 < clock_error <= CLOCK_ERROR_THRESHOLD_MS and 0 < median <= DELAY_CEILING_MS:
+            add("perfsonar.twamp.delay.median", median, "ms")
 
     elif test_type == "trace":
         add("perfsonar.trace.hops", len(result["paths"][0]), "{hops}")

@@ -89,6 +89,30 @@ def test_delay_median_is_still_gated_at_the_known_broken_clock_error():
     assert "perfsonar.twamp.delay.median" not in names(convert(envelope))
 
 
+def test_delay_median_is_gated_when_negative():
+    # 片道遅延が負になるのは物理的にありえない。実測 00:21-00:50 JST の区間は
+    # max-clock-error 0.10〜0.15 と申告しながら -0.8〜-0.2ms を返してゲートを通っていた
+    envelope = latency_envelope(max_clock_error=0.12, histogram={"-0.8": 1, "-0.5": 1, "-0.2": 1})
+
+    assert "perfsonar.twamp.delay.median" not in names(convert(envelope))
+
+
+def test_delay_median_is_gated_when_implausibly_large_for_the_lan():
+    # 実測 01:50 JST: max-clock-error 0.23ms と申告しながら片道遅延 102ms。
+    # LAN の RTT は約0.9msなので片道102msはありえない
+    envelope = latency_envelope(
+        max_clock_error=0.23, histogram={"101.83": 1, "102.0": 1, "102.29": 1}
+    )
+
+    assert "perfsonar.twamp.delay.median" not in names(convert(envelope))
+
+
+def test_plausible_delay_still_passes_both_gates():
+    envelope = latency_envelope(max_clock_error=4.8, histogram={"2.4": 1, "2.5": 1, "2.6": 1})
+
+    assert find(convert(envelope), "perfsonar.twamp.delay.median").value == 2.5
+
+
 def test_max_clock_error_is_exposed_as_attribute(sample):
     metrics = convert(sample("latency-twamp-192.168.1.101-"))
 
