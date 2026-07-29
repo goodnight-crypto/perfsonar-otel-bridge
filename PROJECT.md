@@ -77,6 +77,10 @@ Zenn 記事投稿コンテスト「OpenTelemetryの知見を、記事にしよ�
 - [x] OTel Collector 設定 → Splunk 疎通、メトリクス着弾確認
 - [x] pSConfig テンプレート本番化（全パス・スケジュール定義）※VM 6タスク / RasPi 3タスク稼働中
 - [x] archiver に retry-policy を追加（未設定だと1回の PUT 失敗で測定結果が捨てられる。docs/schema.md）
+      - **再送しても Splunk のグラフは埋まらない**。復旧点は「その間に成功した新しい点」より後に届き、
+        ingest が順序逆転として黙って捨てる（HTTP は 200 OK）。実測で確認、experiments/w2-notes.md Step 12
+      - 30秒段を8回（4分）にしてタスク間隔の5分より前に復旧を終わらせる設計にした。4分以内の障害は救える
+      - 障害注入実験の一次証拠は Splunk のグラフではなく pScheduler の archivings 診断にする
 - [x] Splunk ダッシュボード構築（path.id 別 RTT / ロス / スループット）
       - **as-code**。定義の正は `deploy/splunk/`、投入は `apply.sh`（冪等）。UI 作業なし
       - 7チャート。核は「片道遅延と品質ゲート」= clock_error が跳ねた区間で片道遅延が欠測する一方、

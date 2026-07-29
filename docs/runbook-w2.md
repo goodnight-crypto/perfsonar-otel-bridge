@@ -212,7 +212,29 @@ apply 時に ID へ解決される。
 ### 検証
 
 - `apply.sh` を2回流して `.ids.json` の ID が変わらないこと
-- ブラウザでダッシュボードを開き、7チャート全てにデータが出ること
+- **`./deploy/splunk/check-charts.sh`** — 各チャートの programText を SignalFlow で実際に評価し、
+  publish ラベルごとにデータ点が返ることを確認する。ブラウザを開く前にここで潰せる
+
+  ```
+  lan-rtt                  mean=系列2/点141  max=系列2/点141
+  packet-loss              loss=系列4/点277
+  throughput-retransmits   retransmits=系列2/点22
+  throughput               bps=系列2/点22
+  trace-hops               hops=系列1/点13
+  twamp-delay-gated        delay=系列2/点83  rtt=系列2/点141  clock_error=系列2/点133
+  wan-rtt                  mean=系列2/点135
+  ```
+
+  `twamp-delay-gated` の **delay 83点に対し rtt 141点**（同一6時間）が、
+  ゲートによる欠測を数字で示している
+
+- ブラウザでダッシュボードを開き、レイアウトと閾値線が意図どおり描かれていること
+
+> **読み取りに `/v1/timeserieswindow` を使わないこと。** 連投すると HTTP 200 の本文で
+> `"Your role doesn't let you perform this action."` を返し、さらに叩くと 403 に落ちる
+> （権限の問題に見えるが実体はレート制限）。SignalFlow の
+> `POST https://stream.<realm>.signalfx.com/v2/signalflow/execute` を使う。
+> チャートと同じ programText をそのまま評価できる点でも素直。
 
 ---
 
