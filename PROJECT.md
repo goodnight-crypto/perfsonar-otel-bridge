@@ -89,9 +89,15 @@ Zenn 記事投稿コンテスト「OpenTelemetryの知見を、記事にしよ�
       - 閾値は直近24hの実測ベースラインから決定（docs/runbook-w2.md Step 6 に表）
       - 「2データポイント連続」は `lasting()` ではなく `min(over='12m')` で表現
 - [x] Detector が平常運転で誤検知しないことの確認（6時間20分・発火0件）
-      - 同じ観察窓で **VM のクロックが劣化**していた（clock_error 中央値 0.48ms → 21-23ms、
-        chrony Frequency 3.4ppm → 2586ppm slow）。片道遅延の棄却率が 41% → 87% に上昇。
-        品質ゲートは正しく働いており Detector は影響を受けない。experiments/w2-notes.md Step 13
+      - 同じ観察窓で **VM のクロックが劣化**していた（clock_error 中央値 0.48ms → 21-23ms）。
+        片道遅延の棄却率が 41% → 87% に上昇。Detector は clock 非依存なので影響なし
+- [x] VM の時刻源を修復（Phase D の前提）
+      - 原因は **Ubuntu 既定の `pool ntp.ubuntu.com` が RTT 256.8ms** だったこと。
+        国内源（NICT / IIJ mfeed / Cloudflare）へ差し替え。設定は `deploy/vm/` として repo 化
+      - root dispersion 37.7ms → 0.125ms、max-clock-error 21-23ms → **0.19ms**
+      - 「VM のクロックが構造的に不安定」は**誤診**だった。experiments/w2-notes.md Step 14
+      - ただし片道遅延の実測値は依然 **負値**（-0.26ms）。自己申告 0.19ms に対し実際の
+        相対オフセットは 0.7ms 程度あり、**LAN の片道遅延は NTP の精度の外側**という結論
 - [ ] 実験: tc netem で遅延 100ms・ロス 3% 注入 → Detector 発火 → AI Assistant に原因調査させ記録
       - 注入の前後で `chronyc tracking` の Skew/Frequency を必ず記録する。これを省くと観測された遅延増が
         注入起因かVMクロックのステップ補正起因か区別できず、デモの信頼性が崩れる
