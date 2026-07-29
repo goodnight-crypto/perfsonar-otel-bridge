@@ -276,16 +276,26 @@ apply 時に ID へ解決される。
 
 ### 「2データポイント連続」の書き方
 
-`lasting()` ではなく **12分窓の最小値**で表現している:
+`lasting()` ではなく **12分窓の最小値 + 点数**で表現している:
 
 ```
 sustained = loss.min(over='12m')
-detect(when(sustained > 0.01)).publish('packet_loss_sustained')
+enough    = loss.count(over='12m')
+detect(when(sustained > 0.01 and enough >= 2)).publish('packet_loss_sustained')
 ```
 
-理由: `lasting()` は欠測区間で直前の値を引き延ばすため、5分間隔（slip PT2M で実効 5〜7分）の
-疎な測定系列では意図と合わない。`min(over='12m')` なら「窓内の**全**データポイントが閾値超え」
-= 2点以上連続、を素直に表現でき、単発スパイクは隣接点が 0 なので必ず落ちる。
+`lasting()` を使わない理由: 欠測区間で直前の値を引き延ばすため、5分間隔
+（slip PT2M で実効 5〜7分）の疎な測定系列では意図と合わない。
+
+> **`count(over=)` は後から足した。** 当初は `min(over='12m')` だけで
+> 「窓内の全データポイントが閾値超え = 2点以上連続」と考えていたが、これは誤り。
+> **窓内に1点しか無いとその1点だけで判定する**ため、単発スパイクの直後にデータが
+> 途切れると発火してしまう。実際、11:05 の単発スパイク（wan-cloudflare のロス 0.1）の直後に
+> ブリッジ停止リハーサルで 11:08〜11:20 のデータが欠測し、誤検知した
+> （experiments/w2-notes.md Step 15）。
+>
+> **疎な測定系列では「窓の集約」は点数の保証にならない。** 点数も併せて要求して初めて
+> 「N点連続」になる。
 
 ### 検証
 
@@ -295,6 +305,12 @@ detect(when(sustained > 0.01)).publish('packet_loss_sustained')
 # 発火履歴（空であること）
 ./deploy/splunk/check-alerts.sh
 ```
+
+> **発火判定は `events[].anomalyState == "ANOMALOUS"` で見ること。**
+> レスポンスに含まれる `is` フィールドで判定すると常に空振りし、
+> **発火していても「0件」と表示される。** 実際にこれで6時間の観察結果を誤判定した
+> （experiments/w2-notes.md Step 15）。`check-alerts.sh` は修正済みで、
+> 継続中のインシデント（`/v2/detector/<id>/incidents` の `active`）も併せて出す。
 
 通知先は設定していない（`notifications: []`）。Free Edition では発火の記録は
 Detector の Alerts 履歴で足りる。
@@ -420,5 +436,15 @@ TWAMP の片道遅延（`perfsonar.twamp.delay.median`）は `ps.max_clock_error
 - [x] pSConfig が両ノードで稼働し、`path.id` 付きのタスクが自動生成される
 - [x] archiver の retry-policy を入れ、ブリッジ停止中の測定が復旧後に埋まることを実証
 - [x] Splunk ダッシュボードで `path.id` 別の RTT / ロス / スループットが見える（`deploy/splunk/` で as-code）
-- [x] Detector 3種が定義され、平常時に誤検知しないことを確認（6時間20分・発火0件。experiments/w2-notes.md Step 13）
-- [ ] tc netem 注入 → メトリクス変化 → Detector 発火 → 復旧、を記録（スクリーンショット込み）
+- [x] Detector 3種が定義され、平常時に誤検知しないことを確認
+      - 平常運転区間（11:23〜21:20、約6時間）は発火0件
+      - **ただし観測窓の冒頭で2件発火していた。** 当初「0件」と判定したのは
+        `check-alerts.sh` のバグ（`is` フィールドで判定していた）。発火の原因は
+        ブリッジ停止リハーサルによるデータ欠測で、Detector 側も修正した
+        （experiments/w2-notes.md Step 15）
+- [x] tc netem 注入 → メトリクス変化 → Detector 発火 → 復旧、を記録
+      - RTT 0.93ms → 105ms、ロス 0 → 2〜6%、スループット 940Mbps → 241Mbps
+      - Detector は RTT（双方向）・スループット・WAN 異常検知の**3種が発火**。
+        ロスだけ発火せず（20発サンプルに 3% ロスでは 54% の確率でロス0になるため）
+      - 注入区間でクロックのステップ補正なし（Skew 0.108ppm）。
+        Collector は全区間で送出継続・失敗0
