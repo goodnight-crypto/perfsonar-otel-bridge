@@ -1,0 +1,16 @@
+{
+  "name": "perfSONAR: LAN スループットが劣化している",
+  "description": "有線 LAN 区間の iperf3 スループットが 900 Mbps を割ったら発火する。30分間隔なので連続性は要求しない。実測は 936.7–941.3 Mbps・変動 0.5% 未満と極めて安定していて、閾値は実測 min の約4%下。24時間で一度も割っていないため、この区間では静的閾値が動的ベースラインより素直に機能する",
+  "programText": "bps = data('perfsonar.throughput.bps', filter=filter('path.id', 'lan-wired')).mean(by=['ps.source', 'ps.destination'])\ndetect(when(bps < 900000000)).publish('lan_throughput_degraded')",
+  "maxDelay": null,
+  "tags": ["perfsonar", "as-code"],
+  "rules": [
+    {
+      "severity": "Warning",
+      "detectLabel": "lan_throughput_degraded",
+      "description": "LAN スループットが 900 Mbps を下回った。平常時は 940 Mbps 前後",
+      "notifications": [],
+      "disabled": false
+    }
+  ]
+}

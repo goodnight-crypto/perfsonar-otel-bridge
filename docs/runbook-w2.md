@@ -155,41 +155,127 @@ limactl shell perfsonar-vm docker exec perfsonar-testpoint psconfig pscheduler-t
 
 ---
 
-## Step 5: Splunk ダッシュボード【ユーザー作業・未実施】
+## Step 5: Splunk ダッシュボード【as-code で構築済み】
 
-`.env` には INGEST トークンしか無く API からダッシュボードを作れないため、UI 作業になる。
+> **訂正**: 以前この節には「`.env` には INGEST トークンしか無く API からダッシュボードを
+> 作れないため UI 作業になる」と書いてあったが、これは誤り。`.env` には
+> `SPLUNK_API_TOKEN` があり、Free Edition でも `/v2/chart` `/v2/dashboard` `/v2/detector`
+> は POST/PUT とも通る。**UI 作業は不要で、全て as-code で作れる。**
+> 取得手順は docs/setup-splunk-api-token.md。
 
-作る前にデータを溜めること。RTT / ロスは5分間隔、スループットは30分間隔なので、
-半日〜1日置けばスクリーンショットがそのまま記事に使える密度になる。
+定義の正は `deploy/splunk/`。投入は冪等なスクリプト1本:
 
-想定するチャート:
+```bash
+./deploy/splunk/apply.sh --dry-run   # 送信せず差分を見る
+./deploy/splunk/apply.sh             # チャート → ダッシュボード → Detector
+./deploy/splunk/apply.sh --only detectors
+```
 
-| チャート | メトリクス | 分割 |
-|---|---|---|
-| LAN RTT の推移 | `perfsonar.rtt.mean` / `.max` | `path.id` = lan-wired、`ps.source` で方向別 |
-| WAN RTT の推移 | `perfsonar.rtt.mean` | `path.id` = wan-cloudflare / wan-blog |
-| パケットロス率 | `perfsonar.packet.loss.ratio` | `path.id` 別 |
-| スループット | `perfsonar.throughput.bps` | `path.id` = lan-wired（30分間隔、`ps.source` で方向別） |
-| 経路ホップ数 | `perfsonar.trace.hops` | `path.id` = wan-cloudflare |
-| 片道遅延（品質ゲート付き） | `perfsonar.twamp.delay.median` | `ps.max_clock_error` を併記 |
+生成された ID は `deploy/splunk/.ids.json` に記録され、2回目以降は同じ ID に PUT する。
+UI 側で消された場合は GET が 404 になるので POST に倒れる。
+**トークンはヘッダにしか載せない**（`curl -H` はプロセス引数に出るため、スクリプトは
+Python の urllib で送っている。CLAUDE.md 規約1）。
 
-利用できる dimension: `ps.source` `ps.destination` `ps.test.type` `ps.tool` `path.id`
-`ps.max_clock_error`（latency のみ） `ps.retransmits`（throughput のみ）。
+Splunk O11y の API は**チャートを個別に POST してから、その ID をダッシュボードの
+`charts[]` に row/column/width/height 付きで並べる**構造になっている。グリッドは12カラム。
+`dashboard-network-slo.json` はチャートを**ファイル名**で参照する `layout` を持ち、
+apply 時に ID へ解決される。
 
-`ps.tool` で LAN の RTT が TWAMP 由来（twping）か ICMP 由来（ping）かを判別できる。
+| チャート定義 | 内容 |
+|---|---|
+| `charts/lan-rtt.json` | LAN RTT の mean / max。Detector 閾値 5ms を highWatermark で描画 |
+| `charts/wan-rtt.json` | `path.id: wan-*` の RTT を宛先別に |
+| `charts/packet-loss.json` | ロス率を経路別。Detector 閾値 1% を描画 |
+| `charts/throughput.json` | iperf3 スループットを方向別。900 Mbps を lowWatermark で描画 |
+| `charts/throughput-retransmits.json` | TCP 再送数。方向非対称が一目で分かる |
+| `charts/trace-hops.json` | traceroute のホップ数 |
+| `charts/twamp-delay-gated.json` | **記事の核**。片道遅延・同経路の RTT・clock_error を2軸で重ね、ゲート閾値2本を描画 |
+
+最後の1枚が主題。**clock_error が跳ねた区間で片道遅延が欠測する一方、同じ経路の RTT は
+連続している**ことを1枚で示す（実データで delay は n=111/86、同区間の rtt は n=288）。
+「欠測 = 壊れた」ではなく「欠測 = 信頼できないので捨てた」という設計判断が絵になる。
+
+ゲートは実装上**2段**なので、線も2本引いている（`bridge/psotel/convert.py`）:
+
+- `CLOCK_ERROR_THRESHOLD_MS = 10.0` — max-clock-error の上限（右軸）
+- `DELAY_CEILING_MS = 50.0` — 片道遅延の値そのものの妥当性上限（左軸）
+
+利用できる dimension: `ps.source` `ps.destination` `ps.test.type` `ps.tool` `path.id`。
+
+> `ps.max_clock_error` / `ps.retransmits` は **dimension としては廃止済み**（コミット
+> `1772259` でメトリクス化した）。カーディナリティ爆発の残骸として旧系列が114本残っているが、
+> 新規作成は 2026-07-28 14時で停止しており最終データ点も同日昼なので、24時間ウィンドウの
+> チャートには写らない。チャート側の対処は不要（データの無い系列は描画されない）。
+> なお全チャートの programText は `.mean(by=[...])` で集約しているため、残骸があっても
+> 系列が増えない。
+
+### 検証
+
+- `apply.sh` を2回流して `.ids.json` の ID が変わらないこと
+- ブラウザでダッシュボードを開き、7チャート全てにデータが出ること
 
 ---
 
-## Step 6: Detector 3種【ユーザー作業・未実施】
+## Step 6: Detector【as-code で構築済み・4本】
 
-| Detector | 条件 | 狙い |
+### 実測ベースライン（直近24h、`/v1/timeserieswindow`）
+
+閾値はこの実データから決めた。「閾値を決める前に平常時を確認する」はこれで満たしている。
+
+| メトリクス | 系列 | n | med | p95 | max |
+|---|---|---|---|---|---|
+| `rtt.mean` | lan-wired 双方向 | 376/288 | 0.94–0.98 ms | 1.02–1.08 | 6.3–6.8 |
+| `rtt.mean` | wan-cloudflare / wan-blog | 288 | 9.03–9.12 ms | 9.76–9.82 | 14.4 |
+| `packet.loss.ratio` | lan-wired 双方向 | 376/288 | 0 | 0 | **0** |
+| `packet.loss.ratio` | wan-blog | 288 | 0 | 0 | **0.1**（単発1回） |
+| `throughput.bps` | lan-wired 双方向 | 41/40 | 940.0–940.8 Mbps | — | min 936.7 |
+| `throughput.retransmits` | 104→101 | 41 | **11** | 11 | 12 |
+| `throughput.retransmits` | 101→104 | 40 | **0** | 0 | 0 |
+| `twamp.clock_error` | lan-wired 双方向 | 243 | 0.48 ms | 53–60 | 189 |
+| `twamp.delay.median` | lan-wired 双方向 | 111/86 | 0.72–1.17 ms | 2.5–3.1 | 35–46 |
+| `trace.hops` | wan-cloudflare | 48 | 8 | 9 | 9 |
+
+この表から2点言える:
+
+1. **スループットの静的閾値は「妥協」ではない。** 実測は 936.7–941.3 Mbps・変動 0.5% 未満で
+   異常に安定している。900 Mbps は実測 min の約4%下で、誤検知ゼロが実データで担保できる。
+   この区間では静的閾値のほうが動的ベースラインより素直に機能する。
+2. **`throughput.retransmits` が方向で完全非対称。** 104→101 は常に 11–12、101→104 は常に 0。
+   80回の測定で一度も逆転していない。原因は未究明だが、観察事実として記録しておく。
+
+### Detector
+
+| 定義ファイル | 条件 | 根拠 |
 |---|---|---|
-| パケットロス（静的閾値） | `perfsonar.packet.loss.ratio` > 0.01 が継続 | 明確な障害 |
-| RTT 異常検知 | `perfsonar.rtt.mean` の急上昇（過去比） | 遅延の劣化 |
-| スループット劣化 | `perfsonar.throughput.bps` が基準値を下回る | 有線区間の劣化 |
+| `detectors/packet-loss.json` | `packet.loss.ratio > 0.01` が2データポイント連続 | LAN は 24h 全て 0。wan-blog に 0.1 の単発が1回あるので、単発では発火させない条件が必須 |
+| `detectors/lan-rtt-degraded.json` | `path.id=lan-wired` の `rtt.mean > 5ms` が2点連続 | p95 は 1.02–1.08ms だが外れ値 max が 6.8ms あり単発では誤検知する。netem の 100ms なら確実に発火 |
+| `detectors/lan-throughput-degraded.json` | `path.id=lan-wired` の `throughput.bps < 9e8` | 実測 min 936.7 Mbps。30分間隔なので連続性は要求しない |
+| `detectors/wan-rtt-sudden-change.json` | `against_recent` で 4σ 上振れ（**任意**） | WAN は ISP の揺らぎがあり静的閾値だと運用しづらい。静的閾値との使い分けを示すための4本目で、Exit Criteria には含まれない |
 
-**ロス率の閾値を決める前に、平常時のロス率を実データで確認すること。** 平常時が常に 0.0 なら
-静的閾値で足りるが、揺らぎがあるなら誤検知する。
+### 「2データポイント連続」の書き方
+
+`lasting()` ではなく **12分窓の最小値**で表現している:
+
+```
+sustained = loss.min(over='12m')
+detect(when(sustained > 0.01)).publish('packet_loss_sustained')
+```
+
+理由: `lasting()` は欠測区間で直前の値を引き延ばすため、5分間隔（slip PT2M で実効 5〜7分）の
+疎な測定系列では意図と合わない。`min(over='12m')` なら「窓内の**全**データポイントが閾値超え」
+= 2点以上連続、を素直に表現でき、単発スパイクは隣接点が 0 なので必ず落ちる。
+
+### 検証
+
+作成後、**netem に進む前に最低6時間は平常運転で放置し、1件も発火しないことを確認する。**
+
+```bash
+# 発火履歴（空であること）
+./deploy/splunk/check-alerts.sh
+```
+
+通知先は設定していない（`notifications: []`）。Free Edition では発火の記録は
+Detector の Alerts 履歴で足りる。
 
 ---
 
@@ -206,6 +292,28 @@ limactl shell perfsonar-vm docker exec perfsonar-testpoint psconfig pscheduler-t
   `tc qdisc add dev <if> root netem delay 100ms loss 3%` / `tc qdisc show dev <if>` /
   `tc qdisc del dev <if> root`（削除後は `noqueue` に戻る）。
 
+### 前提: archiver の retry-policy（これが無いと実験の信頼性が崩れる）
+
+`home-lab-mesh.json` の `archives.otel-bridge.data` に `retry-policy` が**必須**。
+
+```json
+"retry-policy": [
+  { "attempts": 3, "wait": "PT30S" },
+  { "attempts": 4, "wait": "PT5M" }
+]
+```
+
+合計7回・最大約21分の再送。5分間隔のタスクに対して十分で、注入区間（15分程度）を
+またいで復旧できる長さ。
+
+なぜ必須か: http archiver プラグインは `retry-policy` が**設定されているときだけ**
+`pscheduler.RetryPolicy` を適用して `result["retry"]` を返す
+（`/usr/lib/pscheduler/classes/archiver/http/archive` の 204–208 行）。未設定だと
+**1回の PUT 失敗で測定結果が捨てられる**。
+
+netem は測定経路とテレメトリ経路が同一（`lima0`）なので、retry-policy 無しで注入すると
+「劣化を検知した」と「テレメトリが届かず欠測した」が区別できない。
+
 ### 注意
 
 **netem は egress にのみ効く。** また `lima0` は測定経路であると同時に**ブリッジへの
@@ -213,6 +321,9 @@ limactl shell perfsonar-vm docker exec perfsonar-testpoint psconfig pscheduler-t
 同じ遅延・ロスがかかる。100ms の遅延と 3% のロスは TCP の再送で吸収される範囲だが、
 「メトリクスが届かない」と「メトリクスが劣化を示す」を混同しないよう、注入中も
 Collector のカウンタが増え続けていることを確認すること。
+
+retry-policy を入れたので、**注入中に PUT が失敗しても後から埋まる**。この「埋まった」
+証拠を残せば、上の混同に実測で答えられる。
 
 ### 手順
 
@@ -260,6 +371,7 @@ TWAMP の片道遅延（`perfsonar.twamp.delay.median`）は `ps.max_clock_error
 - [x] Collector → Splunk の着弾を Collector の内部テレメトリで実数確認
 - [x] compose でブリッジと Collector が常駐し、実 archiver からの経路が通る
 - [x] pSConfig が両ノードで稼働し、`path.id` 付きのタスクが自動生成される
-- [ ] Splunk ダッシュボードで `path.id` 別の RTT / ロス / スループットが見える
-- [ ] Detector 3種が定義され、平常時に誤検知しないことを確認
+- [x] archiver の retry-policy を入れ、ブリッジ停止中の測定が復旧後に埋まることを実証
+- [x] Splunk ダッシュボードで `path.id` 別の RTT / ロス / スループットが見える（`deploy/splunk/` で as-code）
+- [ ] Detector 3種が定義され、平常時に誤検知しないことを確認 ← **定義は完了、6時間の観察待ち**
 - [ ] tc netem 注入 → メトリクス変化 → Detector 発火 → 復旧、を記録（スクリーンショット込み）

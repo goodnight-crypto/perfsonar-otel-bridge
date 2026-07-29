@@ -76,11 +76,20 @@ Zenn 記事投稿コンテスト「OpenTelemetryの知見を、記事にしよ�
 - [x] bridge 実装（FastAPI: /archive 受信 → OTLP push）+ 単体テスト
 - [x] OTel Collector 設定 → Splunk 疎通、メトリクス着弾確認
 - [x] pSConfig テンプレート本番化（全パス・スケジュール定義）※VM 6タスク / RasPi 3タスク稼働中
-- [ ] Splunk ダッシュボード構築（path.id 別 RTT / ロス / スループット）
-- [ ] Detector 3 種（ロス静的閾値 / RTT 異常検知 / スループット劣化）
+- [x] archiver に retry-policy を追加（未設定だと1回の PUT 失敗で測定結果が捨てられる。docs/schema.md）
+- [x] Splunk ダッシュボード構築（path.id 別 RTT / ロス / スループット）
+      - **as-code**。定義の正は `deploy/splunk/`、投入は `apply.sh`（冪等）。UI 作業なし
+      - 7チャート。核は「片道遅延と品質ゲート」= clock_error が跳ねた区間で片道遅延が欠測する一方、
+        同経路の RTT は連続していることを1枚で示す
+- [x] Detector 3 種（ロス静的閾値 / RTT 異常検知 / スループット劣化）+ 任意の4本目（WAN の against_recent）
+      - 閾値は直近24hの実測ベースラインから決定（docs/runbook-w2.md Step 6 に表）
+      - 「2データポイント連続」は `lasting()` ではなく `min(over='12m')` で表現
+- [ ] Detector が平常運転で誤検知しないことの確認（最低6時間・発火0件）
 - [ ] 実験: tc netem で遅延 100ms・ロス 3% 注入 → Detector 発火 → AI Assistant に原因調査させ記録
       - 注入の前後で `chronyc tracking` の Skew/Frequency を必ず記録する。これを省くと観測された遅延増が
         注入起因かVMクロックのステップ補正起因か区別できず、デモの信頼性が崩れる
+      - 前提として archiver の retry-policy が必要。`lima0` は測定経路とテレメトリ経路を兼ねるため、
+        再送が無いと「劣化を検知した」と「テレメトリが届かず欠測した」が区別できない
 
 ### W3（〜8/9）執筆と公開
 - [ ] Zenn 記事執筆（構成案は下記）・スクショ整理

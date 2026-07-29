@@ -1,0 +1,24 @@
+{
+  "name": "ホップ数 (traceroute) — 1.1.1.1",
+  "description": "経路変化の検知用。実測中央値 8、p95 9。ISP 側の経路切替が起きると段差として出る",
+  "programText": "hops = data('perfsonar.trace.hops').mean(by=['path.id', 'ps.destination']).publish(label='hops')",
+  "options": {
+    "type": "TimeSeriesChart",
+    "unitPrefix": "Metric",
+    "colorBy": "Dimension",
+    "defaultPlotType": "LineChart",
+    "showEventLines": false,
+    "stacked": false,
+    "time": { "type": "relative", "range": 86400000, "rangeEnd": 0 },
+    "axes": [{ "label": "hops", "min": 0 }, { "label": "" }],
+    "legendOptions": {
+      "fields": [
+        { "property": "path.id", "enabled": true },
+        { "property": "ps.destination", "enabled": true }
+      ]
+    },
+    "publishLabelOptions": [
+      { "label": "hops", "displayName": "hops", "plotType": "LineChart", "yAxis": 0 }
+    ]
+  }
+}

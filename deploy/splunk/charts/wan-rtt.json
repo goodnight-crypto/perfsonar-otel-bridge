@@ -1,0 +1,24 @@
+{
+  "name": "WAN RTT — 1.1.1.1 / 8091.info",
+  "description": "ISP 品質の基準点と自ブログのエッジまでの往復遅延。実測中央値 9.03–9.12ms、p95 9.76–9.82ms",
+  "programText": "mean = data('perfsonar.rtt.mean', filter=filter('path.id', 'wan-*')).mean(by=['path.id', 'ps.destination']).publish(label='mean')",
+  "options": {
+    "type": "TimeSeriesChart",
+    "unitPrefix": "Metric",
+    "colorBy": "Dimension",
+    "defaultPlotType": "LineChart",
+    "showEventLines": false,
+    "stacked": false,
+    "time": { "type": "relative", "range": 86400000, "rangeEnd": 0 },
+    "axes": [{ "label": "ms", "min": 0 }, { "label": "" }],
+    "legendOptions": {
+      "fields": [
+        { "property": "path.id", "enabled": true },
+        { "property": "ps.destination", "enabled": true }
+      ]
+    },
+    "publishLabelOptions": [
+      { "label": "mean", "displayName": "RTT mean", "plotType": "LineChart", "valueUnit": "Millisecond", "yAxis": 0 }
+    ]
+  }
+}

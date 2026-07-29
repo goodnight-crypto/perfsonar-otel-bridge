@@ -1,0 +1,24 @@
+{
+  "name": "TCP 再送数 — 方向で完全非対称",
+  "description": "104→101 は常に 11–12、101→104 は常に 0。80回の測定で一度も逆転していない。原因は未究明で、観察事実として記録している",
+  "programText": "rtx = data('perfsonar.throughput.retransmits').mean(by=['ps.source', 'ps.destination']).publish(label='retransmits')",
+  "options": {
+    "type": "TimeSeriesChart",
+    "unitPrefix": "Metric",
+    "colorBy": "Dimension",
+    "defaultPlotType": "ColumnChart",
+    "showEventLines": false,
+    "stacked": false,
+    "time": { "type": "relative", "range": 86400000, "rangeEnd": 0 },
+    "axes": [{ "label": "segments", "min": 0 }, { "label": "" }],
+    "legendOptions": {
+      "fields": [
+        { "property": "ps.source", "enabled": true },
+        { "property": "ps.destination", "enabled": true }
+      ]
+    },
+    "publishLabelOptions": [
+      { "label": "retransmits", "displayName": "retransmits", "plotType": "ColumnChart", "yAxis": 0 }
+    ]
+  }
+}

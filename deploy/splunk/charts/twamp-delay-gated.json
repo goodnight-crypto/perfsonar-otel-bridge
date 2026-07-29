@@ -1,0 +1,40 @@
+{
+  "name": "片道遅延と品質ゲート — 欠測は「壊れた」ではなく「捨てた」",
+  "description": "twamp の片道遅延は2段のゲートを通ったものだけを送出する（clock_error ≤ 10ms かつ delay ≤ 50ms、bridge/psotel/convert.py）。clock_error が跳ねた区間で delay が欠測する一方、同じ経路の RTT は連続している = 測定は生きていて片道遅延だけを捨てている、という対比がこのチャートの主題",
+  "programText": "delay = data('perfsonar.twamp.delay.median', filter=filter('path.id', 'lan-wired')).mean(by=['ps.source', 'ps.destination']).publish(label='delay')\nrtt = data('perfsonar.rtt.mean', filter=filter('path.id', 'lan-wired')).mean(by=['ps.source', 'ps.destination']).publish(label='rtt')\nclock = data('perfsonar.twamp.clock_error', filter=filter('path.id', 'lan-wired')).mean(by=['ps.source', 'ps.destination']).publish(label='clock_error')",
+  "options": {
+    "type": "TimeSeriesChart",
+    "unitPrefix": "Metric",
+    "colorBy": "Dimension",
+    "defaultPlotType": "LineChart",
+    "showEventLines": false,
+    "stacked": false,
+    "time": { "type": "relative", "range": 86400000, "rangeEnd": 0 },
+    "axes": [
+      {
+        "label": "片道遅延 / RTT (ms)",
+        "min": 0,
+        "highWatermark": 50,
+        "highWatermarkLabel": "DELAY_CEILING_MS = 50"
+      },
+      {
+        "label": "clock_error (ms)",
+        "min": 0,
+        "highWatermark": 10,
+        "highWatermarkLabel": "CLOCK_ERROR_THRESHOLD_MS = 10"
+      }
+    ],
+    "legendOptions": {
+      "fields": [
+        { "property": "sf_originatingMetric", "enabled": true },
+        { "property": "ps.source", "enabled": true },
+        { "property": "ps.destination", "enabled": true }
+      ]
+    },
+    "publishLabelOptions": [
+      { "label": "delay", "displayName": "片道遅延 median（ゲート通過分のみ）", "plotType": "LineChart", "valueUnit": "Millisecond", "yAxis": 0 },
+      { "label": "rtt", "displayName": "同経路の RTT mean（ゲート無し・比較用）", "plotType": "LineChart", "valueUnit": "Millisecond", "yAxis": 0 },
+      { "label": "clock_error", "displayName": "max-clock-error（右軸）", "plotType": "ColumnChart", "valueUnit": "Millisecond", "yAxis": 1 }
+    ]
+  }
+}

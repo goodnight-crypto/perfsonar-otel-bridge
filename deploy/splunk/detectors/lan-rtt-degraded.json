@@ -1,0 +1,16 @@
+{
+  "name": "perfSONAR: LAN RTT が劣化している",
+  "description": "有線 LAN 区間の RTT が 5ms 超で2データポイント連続したら発火する。実測 p95 は 1.02–1.08ms だが外れ値の max が 6.3–6.8ms あるため、単発では必ず誤検知する。連続性を必須にすることで平常時の外れ値を落とし、netem の 100ms なら確実に発火する",
+  "programText": "rtt = data('perfsonar.rtt.mean', filter=filter('path.id', 'lan-wired')).mean(by=['ps.source', 'ps.destination'])\n# 12分窓の最小値で「2点以上連続」を表現する（packet-loss.json と同じ理由）\nsustained = rtt.min(over='12m')\ndetect(when(sustained > 5)).publish('lan_rtt_degraded')",
+  "maxDelay": null,
+  "tags": ["perfsonar", "as-code"],
+  "rules": [
+    {
+      "severity": "Major",
+      "detectLabel": "lan_rtt_degraded",
+      "description": "LAN RTT 5ms 超が連続している。平常時の中央値は 0.94–0.98ms",
+      "notifications": [],
+      "disabled": false
+    }
+  ]
+}

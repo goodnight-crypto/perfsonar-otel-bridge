@@ -1,0 +1,16 @@
+{
+  "name": "perfSONAR: パケットロスが継続している",
+  "description": "ロス率 1% 超が2データポイント連続したら発火する。実測ベースラインでは LAN は24時間すべて 0、wan-blog だけ 0.1 の単発スパイクが1回あった。単発では発火させないのが要件なので、閾値ではなく min(over) で連続性を要求している",
+  "programText": "loss = data('perfsonar.packet.loss.ratio').mean(by=['path.id', 'ps.source', 'ps.destination'])\n# 5分間隔（slip PT2M で実効 5〜7分）の系列に対し、12分窓の最小値が閾値を超える\n# = 窓内の全データポイントが超えている、すなわち「2点以上連続」。\n# lasting() は欠測区間で最後の値を引き延ばすため、疎な測定系列では min(over) のほうが素直。\nsustained = loss.min(over='12m')\ndetect(when(sustained > 0.01)).publish('packet_loss_sustained')",
+  "maxDelay": null,
+  "tags": ["perfsonar", "as-code"],
+  "rules": [
+    {
+      "severity": "Major",
+      "detectLabel": "packet_loss_sustained",
+      "description": "ロス率 1% 超が連続している。単発スパイクは除外済み",
+      "notifications": [],
+      "disabled": false
+    }
+  ]
+}

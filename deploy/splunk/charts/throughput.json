@@ -1,0 +1,31 @@
+{
+  "name": "スループット (iperf3) — 方向別",
+  "description": "終日30分間隔。実測は 936.7–941.3 Mbps・変動 0.5% 未満で極めて安定しているため、この区間では静的閾値が最適。900 Mbps 線は Detector 閾値",
+  "programText": "bps = data('perfsonar.throughput.bps').mean(by=['ps.source', 'ps.destination']).publish(label='bps')",
+  "options": {
+    "type": "TimeSeriesChart",
+    "unitPrefix": "Metric",
+    "colorBy": "Dimension",
+    "defaultPlotType": "LineChart",
+    "showEventLines": false,
+    "stacked": false,
+    "time": { "type": "relative", "range": 86400000, "rangeEnd": 0 },
+    "axes": [
+      {
+        "label": "bit/s",
+        "lowWatermark": 900000000,
+        "lowWatermarkLabel": "Detector 閾値 900 Mbps"
+      },
+      { "label": "" }
+    ],
+    "legendOptions": {
+      "fields": [
+        { "property": "ps.source", "enabled": true },
+        { "property": "ps.destination", "enabled": true }
+      ]
+    },
+    "publishLabelOptions": [
+      { "label": "bps", "displayName": "throughput", "plotType": "LineChart", "valueSuffix": "bit/s", "yAxis": 0 }
+    ]
+  }
+}

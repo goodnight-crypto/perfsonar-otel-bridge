@@ -1,0 +1,21 @@
+{
+  "chart": {
+    "lan-rtt": "HOWc2edCMAA",
+    "packet-loss": "HOWeF7nCIA4",
+    "throughput": "HOWdHgXCEAE",
+    "throughput-retransmits": "HOWedbuCIAQ",
+    "trace-hops": "HOWeUmUCEAE",
+    "twamp-delay-gated": "HOWfAryCEAI",
+    "wan-rtt": "HOWeF7nCIA8"
+  },
+  "dashboard": {
+    "network-slo": "HOWdHgXCEAI"
+  },
+  "dashboardgroup": "HOWc2kfCIAA",
+  "detector": {
+    "lan-rtt-degraded": "HOWeF7nCIBU",
+    "lan-throughput-degraded": "HOWfAryCEA8",
+    "packet-loss": "HOWgDh8CIAA",
+    "wan-rtt-sudden-change": "HOWedbuCIBA"
+  }
+}

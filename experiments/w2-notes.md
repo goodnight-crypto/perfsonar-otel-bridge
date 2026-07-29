@@ -450,3 +450,79 @@ dimension になるので、**attribute に何を置くかがコスト構造と�
 ログとDBの増加は最初に潰しておく箇所。perfSONAR 公式イメージは logrotate まで
 面倒を見てくれている一方、**自分で足した compose の側に穴があった**という対比が書ける。
 RasPi は SD カードなので特に効く話。
+
+## Step 10: archiver に retry-policy が無く、1回の失敗で測定結果が消えていた
+
+- 日付: 2026-07-29
+- やったこと: netem 障害注入実験（Step 7）の前提を点検していて、
+  `home-lab-mesh.json` の `archives.otel-bridge.data` に `retry-policy` が無いことに気づいた。
+  VM 上の http archiver プラグインの実装を読んで挙動を確認した。
+- 結果 / エラー:
+  - `/usr/lib/pscheduler/classes/archiver/http/archive` の 204-208 行:
+
+    ```python
+    if "retry-policy" in json['data']:
+        policy = pscheduler.RetryPolicy(json['data']['retry-policy'], iso8601=True)
+        retry_time = policy.retry(json["attempts"])
+        if retry_time is not None:
+            result["retry"] = retry_time
+    return result
+    ```
+
+  - **`retry-policy` が設定されているときだけ `result["retry"]` が返る。** 未設定なら
+    `{"succeeded": False, "error": ...}` だけが返り、pScheduler は再送せずその run の結果を捨てる。
+  - つまりこれまでは、ブリッジの再起動・Mac のスリープ・LAN の一時断のたびに、
+    その間の測定が**無音で失われていた**。エラーはブリッジ側にもリポジトリ側にも残らない。
+  - netem は測定経路とテレメトリ経路が同一（`lima0`）なので、この状態で注入すると
+    「劣化を検知した」と「テレメトリが届かず欠測した」が区別できず、実験の信頼性が崩れる。
+- 判断・回避策:
+  - `retry-policy: [{attempts:3, wait:"PT30S"}, {attempts:4, wait:"PT5M"}]` を追加。
+    合計7回・最大約21分。5分間隔のタスクに対して十分で、注入区間（15分程度）をまたげる長さ。
+  - VM / RasPi 双方のホスト `~/psconfig` へ配布 → `psconfig validate` OK →
+    `systemctl restart psconfig-pscheduler-agent` で反映。
+  - **ハマり: 反映には30秒ほどかかる。** 再起動直後に `psconfig pscheduler-tasks` を叩くと
+    まだ旧定義（retry-policy 無し）が返り、「配布に失敗した」と誤解する。RasPi で実際に踏んだ。
+  - **観察: pSConfig は archive 定義が変わると別タスクとして作り直す。** 旧タスクは
+    `until`（作成時 +24h）が切れるまで並存する。実測で lan-wired の rtt は
+    retry あり2本 + retry なし3本が同時に見えた。データ点数は 24h で n≈288（= 5分間隔ぶん）
+    なので pScheduler 側で重複 run は落ちており、測定頻度は増えていない。
+    旧タスクは当日中に自然消滅するため放置してよい。
+
+## Step 11: ダッシュボードと Detector を as-code で構築（UI 作業は不要だった）
+
+- 日付: 2026-07-29
+- やったこと: runbook Step 5 の「`.env` には INGEST トークンしか無く API から
+  ダッシュボードを作れないため UI 作業になる」という前提を実地で検証した。
+- 結果 / エラー:
+  - **前提が誤りだった。** `.env` には `SPLUNK_API_TOKEN` があり、Free Edition でも
+    `/v2/chart` `/v2/dashboard` `/v2/dashboardgroup` `/v2/detector` は POST/PUT とも通る。
+  - **カスタム Detector の作成も可能**（ハンドオフの未解決事項1）。
+    捨てる前提のプローブを1本 POST → `ACTIVE` で作成成功 → DELETE 204、で確認してから本作業に入った。
+  - Splunk O11y の API 構造: **チャートを個別に POST してから、その ID を
+    ダッシュボードの `charts[]` に row/column/width/height 付きで並べる。**
+    ダッシュボードにチャートをインラインで書く形式は無い。グリッドは12カラム。
+  - `POST /v2/detector/validate` が 204 を返せば SignalFlow の構文は妥当。投入前に潰せる。
+  - **ハマり: `/v1/timeserieswindow` は連投すると
+    `"Your role doesn't let you perform this action."` を HTTP 200 の本文で返す。**
+    権限の問題に見えるが実体はレート制限で、数秒空ければ同じクエリが通る。
+    調査スクリプトには待って再試行する分岐を入れた。
+- 判断・回避策:
+  - 定義の正を `deploy/splunk/` に置き、`apply.sh` で冪等に投入する形にした。
+    生成 ID は `.ids.json` に記録し、2回目以降は同じ ID に PUT する（実際に2回流して確認）。
+    UI で消された場合は GET が 404 になるので POST に倒れる。
+  - **トークンは `curl -H` ではなく Python の urllib でヘッダに載せている。**
+    `curl -H "X-SF-TOKEN: $TOKEN"` はプロセス引数に載るので `ps` で他ユーザーから見える。
+  - チャートの programText は全て `.mean(by=[...])` で集約した。Step 8 のカーディナリティ爆発の
+    残骸（旧 dimension を持つ系列が114本）があっても系列が増えず、放置で済む。
+
+### 記事ネタ
+
+- 「Free Edition だから UI でポチポチするしかない」は**確かめずに書いた思い込み**だった。
+  ハンドオフ文書に残っていた前提を実地で1本叩いて潰す、という手順そのものが書ける。
+- **`lasting()` ではなく `min(over='12m')` で「2データポイント連続」を表現した**話。
+  `lasting()` は欠測区間で直前の値を引き延ばすため、5分間隔の疎な測定系列では意図と合わない。
+  「窓内の全データポイントが閾値超え = 連続」という言い換えは、疎な系列の Detector 全般に効く。
+- **スループットの静的閾値は妥協ではなかった。** 実測 936.7–941.3 Mbps・変動0.5%未満。
+  「異常検知が常に上位互換」ではなく、**対象の分散を測ってから選ぶ**という話にできる。
+- **TCP 再送数が方向で完全非対称**（104→101 は常に 11-12、101→104 は常に 0、80回で一度も逆転なし）。
+  原因は未究明。定点観測を始めると「気づいてしまう」ものの例。

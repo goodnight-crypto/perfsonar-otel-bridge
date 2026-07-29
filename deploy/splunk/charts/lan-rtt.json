@@ -1,0 +1,34 @@
+{
+  "name": "LAN RTT (twping) — mean / max",
+  "description": "VM ↔ RasPi の有線 LAN 区間の往復遅延。クロック非依存の基準線（docs/schema.md）。実測 p95 は 1.02–1.08ms",
+  "programText": "mean = data('perfsonar.rtt.mean', filter=filter('path.id', 'lan-wired')).mean(by=['ps.source', 'ps.destination']).publish(label='mean')\nmax = data('perfsonar.rtt.max', filter=filter('path.id', 'lan-wired')).mean(by=['ps.source', 'ps.destination']).publish(label='max')",
+  "options": {
+    "type": "TimeSeriesChart",
+    "unitPrefix": "Metric",
+    "colorBy": "Dimension",
+    "defaultPlotType": "LineChart",
+    "showEventLines": false,
+    "stacked": false,
+    "time": { "type": "relative", "range": 86400000, "rangeEnd": 0 },
+    "axes": [
+      {
+        "label": "ms",
+        "min": 0,
+        "highWatermark": 5,
+        "highWatermarkLabel": "Detector 閾値 5ms"
+      },
+      { "label": "" }
+    ],
+    "legendOptions": {
+      "fields": [
+        { "property": "sf_originatingMetric", "enabled": true },
+        { "property": "ps.source", "enabled": true },
+        { "property": "ps.destination", "enabled": true }
+      ]
+    },
+    "publishLabelOptions": [
+      { "label": "mean", "displayName": "RTT mean", "plotType": "LineChart", "valueUnit": "Millisecond", "yAxis": 0 },
+      { "label": "max", "displayName": "RTT max", "plotType": "LineChart", "valueUnit": "Millisecond", "yAxis": 0 }
+    ]
+  }
+}

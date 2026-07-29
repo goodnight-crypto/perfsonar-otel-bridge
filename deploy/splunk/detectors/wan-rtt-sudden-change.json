@@ -1,0 +1,16 @@
+{
+  "name": "perfSONAR: WAN RTT が平常から逸脱した",
+  "description": "WAN 側は ISP の揺らぎがあり静的閾値だと運用しづらいので、直近と過去の比較（against_recent）で異常を検知する。静的閾値（LAN 側3本）との使い分けを示すための4本目で、W2 の Exit Criteria には含まれない",
+  "programText": "from signalfx.detectors.against_recent import against_recent\n\nwan = data('perfsonar.rtt.mean', filter=filter('path.id', 'wan-*')).mean(by=['path.id', 'ps.destination'])\nagainst_recent.detector_mean_std(stream=wan, current_window='20m', historical_window='4h', fire_num_stddev=4, clear_num_stddev=3, orientation='above').publish('wan_rtt_sudden_change')",
+  "maxDelay": null,
+  "tags": ["perfsonar", "as-code", "optional"],
+  "rules": [
+    {
+      "severity": "Minor",
+      "detectLabel": "wan_rtt_sudden_change",
+      "description": "WAN RTT が直近4時間の平常から 4σ 以上上振れした",
+      "notifications": [],
+      "disabled": false
+    }
+  ]
+}
