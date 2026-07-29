@@ -420,5 +420,5 @@ TWAMP の片道遅延（`perfsonar.twamp.delay.median`）は `ps.max_clock_error
 - [x] pSConfig が両ノードで稼働し、`path.id` 付きのタスクが自動生成される
 - [x] archiver の retry-policy を入れ、ブリッジ停止中の測定が復旧後に埋まることを実証
 - [x] Splunk ダッシュボードで `path.id` 別の RTT / ロス / スループットが見える（`deploy/splunk/` で as-code）
-- [ ] Detector 3種が定義され、平常時に誤検知しないことを確認 ← **定義は完了、6時間の観察待ち**
+- [x] Detector 3種が定義され、平常時に誤検知しないことを確認（6時間20分・発火0件。experiments/w2-notes.md Step 13）
 - [ ] tc netem 注入 → メトリクス変化 → Detector 発火 → 復旧、を記録（スクリーンショット込み）
