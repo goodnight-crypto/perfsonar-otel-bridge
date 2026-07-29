@@ -202,6 +202,52 @@ rttテスト）:
 - 遅延系メトリクス（mean/max/histogram-latency等）は**キーの存在チェックが必須**。欠落時はメトリクスを送らない（0や欠測扱いではなく、単に出力しない）
 - 真の「タスク失敗」（`succeeded: false`、DNS解決失敗等のエラー）のサンプルは未取得。W2のブリッジ実装時に`.result.error`フィールドの有無で分岐する設計とし、必要になった時点でサンプルを追加取得する
 
+## archiver の retry-policy — 無いと1回の失敗で測定結果が消える
+
+`home-lab-mesh.json` の `archives.otel-bridge.data` に `retry-policy` を書いている。
+
+```json
+"data": {
+  "_url": "http://192.168.0.1:8088/archive",
+  "op": "put",
+  "retry-policy": [
+    { "attempts": 3, "wait": "PT30S" },
+    { "attempts": 4, "wait": "PT5M" }
+  ]
+}
+```
+
+合計7回・最大約21分の再送。形式は `attempts`（回数）と ISO8601 の `wait`（間隔）の配列。
+
+**これが無いとどうなるか**: http archiver プラグインは失敗時に必ず再送するわけではない。
+
+```python
+# /usr/lib/pscheduler/classes/archiver/http/archive の 204-208 行
+if "retry-policy" in json['data']:
+    policy = pscheduler.RetryPolicy(json['data']['retry-policy'], iso8601=True)
+    retry_time = policy.retry(json["attempts"])
+    if retry_time is not None:
+        result["retry"] = retry_time
+return result
+```
+
+`retry-policy` が**設定されているときだけ** `result["retry"]` が返る。未設定なら
+`{"succeeded": False, "error": ...}` だけが返り、pScheduler は再送せずその run の結果を捨てる。
+ブリッジの再起動・Mac のスリープ・LAN の一時断のたびに、その間の測定が無音で失われる。
+
+これは netem 障害注入実験（docs/runbook-w2.md Step 7）の前提でもある。注入対象の `lima0` は
+測定経路であると同時にテレメトリ経路でもあるため、retry-policy が無いと
+「劣化を検知した」と「テレメトリが届かず欠測した」が区別できない。
+
+### Detector の maxDelay とのトレードオフ
+
+再送で最大21分遅れて届いたデータ点は、Splunk O11y の Detector からは
+`maxDelay`（最大 15 分）を超えた遅延データとして評価対象外になりうる。
+`maxDelay` を上げれば拾えるが、その分だけ発火も遅くなる。
+`deploy/splunk/detectors/` では `maxDelay: null`（自動）にして**発火の速さを優先**している。
+再送分はチャートとデータ保管には残るが、Detector の判定には間に合わないことがある、
+という割り切り。
+
 ## 参考: 実サンプル一覧（docs/samples/）
 
 | ファイル | テスト種 | 備考 |
