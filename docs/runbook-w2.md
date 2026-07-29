@@ -298,13 +298,10 @@ Detector の Alerts 履歴で足りる。
 
 ```json
 "retry-policy": [
-  { "attempts": 3, "wait": "PT30S" },
+  { "attempts": 8, "wait": "PT30S" },
   { "attempts": 4, "wait": "PT5M" }
 ]
 ```
-
-合計7回・最大約21分の再送。5分間隔のタスクに対して十分で、注入区間（15分程度）を
-またいで復旧できる長さ。
 
 なぜ必須か: http archiver プラグインは `retry-policy` が**設定されているときだけ**
 `pscheduler.RetryPolicy` を適用して `result["retry"]` を返す
@@ -313,6 +310,34 @@ Detector の Alerts 履歴で足りる。
 
 netem は測定経路とテレメトリ経路が同一（`lima0`）なので、retry-policy 無しで注入すると
 「劣化を検知した」と「テレメトリが届かず欠測した」が区別できない。
+
+**ただし再送で Splunk のグラフが埋まるわけではない。** 復旧点は「その間に成功した新しい点」
+より後に届くため、Splunk O11y の ingest が順序逆転として黙って捨てる（実測。docs/schema.md）。
+30秒段を8回（4分）にしてあるのは、タスク間隔の5分より前に復旧を終わらせて順序を保つため。
+
+したがって**この実験の一次証拠は Splunk のグラフではなく、pScheduler の run ごとの
+archivings 診断**にする。全試行の時刻・成否・次の retry 間隔がここに残る:
+
+```bash
+# 注入区間の run について、PUT の試行履歴を出す
+limactl shell perfsonar-vm docker exec perfsonar-testpoint python3 -c "
+import json,subprocess
+def g(u): return json.loads(subprocess.run(['curl','-s','-k',u],capture_output=True,text=True).stdout)
+tasks=g('https://localhost/pscheduler/tasks')
+for tu in tasks:
+    t=g(tu)
+    if (t.get('reference') or {}).get('path.id')!='lan-wired' or t['test']['type']!='rtt': continue
+    if not any('retry-policy' in a.get('data',{}) for a in (t.get('archives') or [])): continue
+    for ru in g(tu+'/runs?limit=8'):
+        r=g(ru)
+        for a in (r.get('archivings') or []):
+            d=a.get('diags') or []
+            print(r.get('start-time','')[11:19], 'archived=', a.get('archived'), 'attempts=', len(d))
+            for x in d:
+                so=x.get('stdout') or {}
+                print('   ', x['time'][11:19], 'succeeded=', so.get('succeeded'), 'retry=', so.get('retry'))
+"
+```
 
 ### 注意
 

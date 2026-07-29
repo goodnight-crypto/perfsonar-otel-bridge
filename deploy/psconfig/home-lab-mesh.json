@@ -80,14 +80,14 @@
   "archives": {
     "otel-bridge": {
       "_meta": {
-        "note": "retry-policy が無いと archiver は1回の PUT 失敗で結果を捨てる（プラグインは retry-policy 未設定時に result['retry'] を設定しない）。合計7回・最大約21分の再送で、5分間隔タスクなら netem の注入区間をまたいで復旧できる。docs/schema.md 参照"
+        "note": "retry-policy が無いと archiver は1回の PUT 失敗で結果を捨てる（プラグインは retry-policy 未設定時に result['retry'] を設定しない）。30秒段を8回にしてあるのは、4分以内の障害なら次の run より前に復旧させて Splunk への到着順序を保つため。5分段まで落ちた復旧点は Splunk が捨てる（順序逆転）。docs/schema.md 参照"
       },
       "archiver": "http",
       "data": {
         "_url": "http://192.168.0.1:8088/archive",
         "op": "put",
         "retry-policy": [
-          { "attempts": 3, "wait": "PT30S" },
+          { "attempts": 8, "wait": "PT30S" },
           { "attempts": 4, "wait": "PT5M" }
         ]
       }
