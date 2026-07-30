@@ -119,9 +119,15 @@ ssh dev@192.168.1.102 "docker exec perfsonar-testpoint \
 
 ## Step 5: pSConfig への組み込み
 
-> **2026-07-30 の実行では Step 5 を GbE NIC 切替作業にまとめ、ここでは実施しない。**
-> `home-lab-mesh.json` を二度触らずに済み、Splunk のデータにも断絶が出ないため。
-> 切替時にやることは `experiments/w3-notes.md` Step 6 の「GbE NIC 到着後にやること」に集約する。
+> **2026-07-30 に実施済み**（`experiments/w3-notes.md` Step 10 / `experiments/public-hosts.md`）。
+> 予告どおり pSConfig 切替作業にまとめて一度で入れたので、`home-lab-mesh.json` は二度触っていない。
+> 投入した path.id は `wan-sinet-tokyo`（`perf-tokyo.sinet.ad.jp`）と
+> `wan-riken-tsukuba`（`ps-tkb-100g.riken.jp`）。どちらも **twamp の片道遅延 + twping の RTT** を
+> PT15M で回している。同時に商用網の第2参照として `wan-google`（8.8.8.8）も足した。
+>
+> なお「Splunk のデータに断絶が出ない」という当時の見込みは**外れた**。測定ノードが
+> VM(192.168.1.104) から LG Gram(192.168.1.102) に移ったため、`ps.source` でグルーピングして
+> いる系列は 2026-07-30 22:52 JST で切れて別系列として引き直しになる（下の Step 5-4 も参照）。
 
 1. `deploy/psconfig/` のテンプレートに追加:
    - addresses に選定 2 ホスト
@@ -134,6 +140,9 @@ ssh dev@192.168.1.102 "docker exec perfsonar-testpoint \
    ```
 3. ブリッジ経由で Splunk にメトリクス着弾を確認（`ps.destination` に公開ホストが現れること）
 4. Splunk ダッシュボードに「LAN vs WAN」重ね合わせチャートを追加
+   → 実際には**別チャート `wan-owd` を新設**して LAN の `twamp-delay-gated` の真下に置いた。
+   片道遅延の品質ゲート上限が LAN 5ms / WAN 200ms と桁違いになり、同一チャートに重ねると
+   どちらの watermark も意味を成さなくなるため
 5. CLAUDE.md の環境インベントリに選定ホストを追記
 
 ## 運用上の注意（CLAUDE.md 規約に準ずる）
@@ -144,8 +153,8 @@ ssh dev@192.168.1.102 "docker exec perfsonar-testpoint \
 
 ## Exit Criteria
 
-- [ ] public-hosts.md に候補一覧・実測結果・選定理由が記録されている
-- [ ] 2 台選定済み（うち 1 台以上で twamp が通ることが望ましい）
-- [ ] pSConfig に wan パス 2 本が追加され、15 分間隔で自動測定が回っている
+- [x] public-hosts.md に候補一覧・実測結果・選定理由が記録されている
+- [x] 2 台選定済み（うち 1 台以上で twamp が通ることが望ましい）→ **2 台とも twamp 可**
+- [x] pSConfig に wan パス 2 本が追加され、15 分間隔で自動測定が回っている（2026-07-30）
 - [ ] Splunk に `path.id: wan-*` のメトリクスが着弾し、ダッシュボードに表示されている
 - [ ] （打ち切りの場合）打ち切り判断と理由が experiments/ に記録されている

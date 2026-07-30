@@ -1,6 +1,6 @@
 {
   "name": "片道遅延と品質ゲート — 欠測は「壊れた」ではなく「捨てた」",
-  "description": "twamp の片道遅延は2段のゲートを通ったものだけを送出する（clock_error ≤ 10ms かつ delay ≤ 50ms、bridge/psotel/convert.py）。clock_error が跳ねた区間で delay が欠測する一方、同じ経路の RTT は連続している = 測定は生きていて片道遅延だけを捨てている、という対比がこのチャートの主題",
+  "description": "twamp の片道遅延は2段のゲートを通ったものだけを送出する（clock_error ≤ 10ms かつ 0 < delay ≤ 5ms、bridge/psotel/convert.py）。上限は path.id ごとに違い、LAN は GbE 化後の実測 0.2〜0.64ms を踏まえて 5ms に絞ってある（WAN は wan-owd チャートを参照）。clock_error が跳ねた区間で delay が欠測する一方、同じ経路の RTT は連続している = 測定は生きていて片道遅延だけを捨てている、という対比がこのチャートの主題。なお GbE 化で LAN の片道遅延は測定精度の床に当たり、負値や Not Reported が頻出する。delay 系列がまばらになるのは不具合ではなく実態の反映",
   "programText": "delay = data('perfsonar.twamp.delay.median', filter=filter('path.id', 'lan-wired')).mean(by=['ps.source', 'ps.destination']).publish(label='delay')\nrtt = data('perfsonar.rtt.mean', filter=filter('path.id', 'lan-wired')).mean(by=['ps.source', 'ps.destination']).publish(label='rtt')\nclock = data('perfsonar.twamp.clock_error', filter=filter('path.id', 'lan-wired')).mean(by=['ps.source', 'ps.destination']).publish(label='clock_error')",
   "options": {
     "type": "TimeSeriesChart",
@@ -14,8 +14,8 @@
       {
         "label": "片道遅延 / RTT (ms)",
         "min": 0,
-        "highWatermark": 50,
-        "highWatermarkLabel": "DELAY_CEILING_MS = 50"
+        "highWatermark": 5,
+        "highWatermarkLabel": "DELAY_CEILING_MS['lan-wired'] = 5"
       },
       {
         "label": "clock_error (ms)",

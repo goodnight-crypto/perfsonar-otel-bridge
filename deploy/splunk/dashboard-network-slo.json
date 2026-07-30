@@ -5,9 +5,10 @@
     { "chart": "lan-rtt", "row": 0, "column": 0, "width": 6, "height": 1 },
     { "chart": "wan-rtt", "row": 0, "column": 6, "width": 6, "height": 1 },
     { "chart": "twamp-delay-gated", "row": 1, "column": 0, "width": 12, "height": 2 },
-    { "chart": "packet-loss", "row": 3, "column": 0, "width": 6, "height": 1 },
-    { "chart": "throughput", "row": 3, "column": 6, "width": 6, "height": 1 },
-    { "chart": "throughput-retransmits", "row": 4, "column": 0, "width": 6, "height": 1 },
-    { "chart": "trace-hops", "row": 4, "column": 6, "width": 6, "height": 1 }
+    { "chart": "wan-owd", "row": 3, "column": 0, "width": 12, "height": 2 },
+    { "chart": "packet-loss", "row": 5, "column": 0, "width": 6, "height": 1 },
+    { "chart": "throughput", "row": 5, "column": 6, "width": 6, "height": 1 },
+    { "chart": "throughput-retransmits", "row": 6, "column": 0, "width": 6, "height": 1 },
+    { "chart": "trace-hops", "row": 6, "column": 6, "width": 6, "height": 1 }
   ]
 }

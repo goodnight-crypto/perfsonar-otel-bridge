@@ -1,7 +1,8 @@
 # 公開 perfSONAR ホストの選定ログ
 
 `docs/runbook-w2-public-hosts.md` の Step 1〜4（候補選定の実測）の作業ログ。
-Step 5（pSConfig への組み込み）は GbE NIC 切替作業にまとめるため、ここでは扱わない。
+Step 5（pSConfig への組み込み）は予告どおり GbE NIC 切替作業にまとめ、**2026-07-30 に完了した**
+（→ 末尾「Step 5 の実施結果」・`experiments/w3-notes.md` Step 10）。
 
 - 開始日: 2026-07-30
 - 実行ノード: **LG Gram（192.168.1.102）の testpoint コンテナ**
@@ -259,17 +260,31 @@ Runbook の間隔を「2 時間以上」から「30〜40 分」に短縮した�
 | `nms5.jp.apan.net` / `163-220-229-67.v4.coe.ad.jp` | **twamp の試験パケットが返らず rtt しか取れない**。RTT なら安定しているが、**片道遅延という今回の主目的を満たさない** |
 | `perfsonar2.cc.kek.jp` | Step 2 で脱落（ICMP・443 とも到達せず） |
 
-## 次にやること（GbE NIC 切替時）
+## Step 5 の実施結果（2026-07-30、pSConfig 切替と同時）
 
-Step 5（pSConfig への組み込み）は切替作業にまとめる。`w3-notes.md` Step 6 の
-「GbE NIC 到着後にやること」に以下を足す。
+選定 2 台を `deploy/psconfig/home-lab-mesh.json` に投入した。詳細は `w3-notes.md` Step 10。
 
-1. `deploy/psconfig/home-lab-mesh.json` に上記 2 ホストを `addresses` として追加
-2. `wan-sinet-tokyo` / `wan-riken-tsukuba` の latency タスク（`--protocol=twamp`）を
-   **schedule `PT15M`** で追加（公開リソースへの配慮。15 分より短くしない）
-3. **GbE 化後に非対称を再測定する。** 受信方向の +0.94ms が消えれば、残る非対称は
-   経路由来と言い切れる。特に大阪の −0.39ms を確認する
-4. Splunk で `path.id: wan-*` の着弾を確認
+| path.id | 宛先 | 投入したタスク | 間隔 |
+|---|---|---|---|
+| `wan-sinet-tokyo` | `perf-tokyo.sinet.ad.jp` | latency(twamp) + rtt(**twping**) | PT15M |
+| `wan-riken-tsukuba` | `ps-tkb-100g.riken.jp` | latency(twamp) + rtt(**twping**) | PT15M |
+| `wan-google` | `8.8.8.8` | rtt(ping) + trace | PT5M / PT30M |
+
+- **RTT を twping で取る**のは、片道遅延と同一プロトコル・同一パケット系にして
+  非対称（RTT − 片道 − 片道）にプロトコル差を混入させないため。Step 3 の手動実測と同じ組
+- **`wan-google` は選定作業の産物ではない。** 商用網の参照が Cloudflare 1 本しかない
+  構造的な弱点への対処（`w3-notes.md` Step 9）。1.1.1.1 と同じ ping・同じ PT5M にして対照になるようにした
+- **`wan-owd` の test spec は `source` を書かない形で `psconfig validate` を通った。**
+  CLI の手動実測で通ったからといって pSConfig のスキーマで通るとは限らないと見ていたが、通った
+- 相手先への負荷: 公開ホスト 2 台 × (100 発 + 10 発) × 4 回/時。**throughput は張っていない**
+
+### 残っている宿題
+
+- **GbE 化後の非対称の再測定。** 受信方向の +0.94ms は解消済み（`w3-notes.md` Step 8）なので、
+  15 分間隔の本番測定が貯まれば、残る非対称は経路由来と言い切れる。**選定 2 台については
+  常時観測に載ったので、あとは眺めるだけ**
+- **大阪の −0.39ms の確認は未着手。** `perf-osaka.sinet.ad.jp` は補欠のままで本番に入れていない。
+  NIC の癖では説明できない唯一のホストなので、3 本目を足すならこれ
 
 ## 相手先への負荷（実績）
 

@@ -18,16 +18,27 @@ logger = logging.getLogger(__name__)
 # 10.0 へ引き上げた。異常サンプルは n=1 なので、これは検証済みの境界ではなく発見的な値。
 CLOCK_ERROR_THRESHOLD_MS = 10.0
 
-# 片道遅延の値そのものに対する妥当性の上限（ms）。
+# 片道遅延の値そのものに対する妥当性の上限（ms）。path.id ごとに経路の実態で分ける。
 #
 # max-clock-error のゲートだけでは不十分だと実測で判明したため追加した。
 # 誤差 0.23ms と自己申告しながら片道遅延 102ms を返す run が実在し、
 # ゲートを通過した約55件のうち少なくとも15件が物理的にありえない値だった
 # （experiments/w2-notes.md Step 5-2）。
 #
-# この上限は home-lab-mesh.json の LAN ペア（RTT 約0.9ms）を前提にしている。
-# WAN 区間で latency テストを使う場合は経路に応じた値に変える必要がある。
-DELAY_CEILING_MS = 50.0
+# 当初は全経路一律 50.0 だったが、これは LAN ペア専用の値であり、WAN を測り始めると
+# 二重に間違う: LAN には緩すぎ、WAN では実在する輻輳を無言で捨てる。
+#
+# LAN を 5.0 に絞っても iperf3 とは衝突しない。throughput は `exclusive`、rtt は
+# `background`、latency は `normal` で、**pScheduler は iperf3 実行中に自分の他の測定を
+# 走らせない**（experiments/w2-notes.md:303-305 の実測）。30分ごとの iperf3 に押し上げられた
+# 片道遅延が誤ってゲートに落ちる経路は設計上塞がれている（測定は失われず slip する）。
+DELAY_CEILING_MS = {
+    "lan-wired": 5.0,  # 実測 0.2〜0.64ms。GbE 化後の精度の床を踏まえ厳しくする
+    "wan-sinet-tokyo": 200.0,  # 平常 3.9ms。ICEPP で観測した 80〜90ms の輻輳も残す
+    "wan-riken-tsukuba": 200.0,  # 平常 4.7ms
+}
+# path.id が無い手動タスク用。経路が分からない以上、緩めも締めもできない
+DEFAULT_DELAY_CEILING_MS = 50.0
 
 
 @dataclass(frozen=True)
@@ -125,8 +136,10 @@ def convert(envelope: dict) -> list[Metric]:
         add("perfsonar.twamp.clock_error", clock_error, "ms")
         median = weighted_median(result["histogram-latency"])
         # 自己申告のクロック誤差は当てにならないので、値そのものの妥当性も見る。
-        # 負の片道遅延は物理的にありえず、LAN で数十msも同様
-        if 0 < clock_error <= CLOCK_ERROR_THRESHOLD_MS and 0 < median <= DELAY_CEILING_MS:
+        # 負の片道遅延は物理的にありえず、LAN で数十msも同様。
+        # 上限は経路依存なので path.id で引く（未知の path.id も既定値に落ちる）
+        ceiling = DELAY_CEILING_MS.get(attributes.get("path.id"), DEFAULT_DELAY_CEILING_MS)
+        if 0 < clock_error <= CLOCK_ERROR_THRESHOLD_MS and 0 < median <= ceiling:
             add("perfsonar.twamp.delay.median", median, "ms")
 
     elif test_type == "trace":

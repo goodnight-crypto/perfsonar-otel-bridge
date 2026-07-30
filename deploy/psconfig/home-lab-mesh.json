@@ -5,26 +5,47 @@
   },
 
   "addresses": {
-    "vm":         { "address": "192.168.1.104", "_meta": { "display-name": "Mac 上の Lima VM" } },
-    "raspi":      { "address": "192.168.1.101", "_meta": { "display-name": "Raspberry Pi 4B（有線）" } },
-    "cloudflare": { "address": "1.1.1.1",       "_meta": { "display-name": "1.1.1.1（ISP 品質の基準点）" } },
-    "blog":       { "address": "8091.info",     "_meta": { "display-name": "自ブログのエッジ" } }
+    "lggram":        { "address": "192.168.1.102",          "_meta": { "display-name": "LG Gram 13Z970（bare metal・測定ノード）" } },
+    "raspi":         { "address": "192.168.1.101",          "_meta": { "display-name": "Raspberry Pi 4B（有線）" } },
+    "cloudflare":    { "address": "1.1.1.1",                "_meta": { "display-name": "1.1.1.1（ISP 品質の基準点）" } },
+    "google-dns":    { "address": "8.8.8.8",                "_meta": { "display-name": "8.8.8.8（商用網の第2参照。Cloudflare との対照）" } },
+    "blog":          { "address": "8091.info",              "_meta": { "display-name": "自ブログのエッジ" } },
+    "sinet-tokyo":   { "address": "perf-tokyo.sinet.ad.jp", "_meta": { "display-name": "SINET 東京（公開 perfSONAR・twamp 可）" } },
+    "riken-tsukuba": { "address": "ps-tkb-100g.riken.jp",   "_meta": { "display-name": "理研つくば（公開 perfSONAR・twamp 可）" } }
   },
 
   "groups": {
     "lan-pair": {
       "type": "mesh",
-      "addresses": [ { "name": "vm" }, { "name": "raspi" } ]
+      "addresses": [ { "name": "lggram" }, { "name": "raspi" } ]
     },
     "wan-cloudflare": {
       "type": "disjoint",
-      "a-addresses": [ { "name": "vm" } ],
+      "a-addresses": [ { "name": "lggram" } ],
       "b-addresses": [ { "name": "cloudflare" } ]
+    },
+    "wan-google": {
+      "_meta": {
+        "note": "商用網の参照が Cloudflare 1本しかないと『自宅が悪い』と『相手への経路が悪い』を区別できない。2026-07-30 に Cloudflare だけが 8.9→122ms へ遠回りする事象が起きて露呈した（experiments/w3-notes.md Step 9）。Cloudflare と同じ ping・同じ間隔にして対照になるようにしてある"
+      },
+      "type": "disjoint",
+      "a-addresses": [ { "name": "lggram" } ],
+      "b-addresses": [ { "name": "google-dns" } ]
     },
     "wan-blog": {
       "type": "disjoint",
-      "a-addresses": [ { "name": "vm" } ],
+      "a-addresses": [ { "name": "lggram" } ],
       "b-addresses": [ { "name": "blog" } ]
+    },
+    "wan-sinet-tokyo": {
+      "type": "disjoint",
+      "a-addresses": [ { "name": "lggram" } ],
+      "b-addresses": [ { "name": "sinet-tokyo" } ]
+    },
+    "wan-riken-tsukuba": {
+      "type": "disjoint",
+      "a-addresses": [ { "name": "lggram" } ],
+      "b-addresses": [ { "name": "riken-tsukuba" } ]
     }
   },
 
@@ -64,6 +85,17 @@
         "count": 10
       }
     },
+    "wan-owd": {
+      "_meta": {
+        "note": "lan-owd と違い source を書かない。WAN 宛はローカルが source であり、手動実測もこの形で通した（experiments/public-hosts.md Step 3）。lan-owd と同じく protocol を書くため schema 4 が必須"
+      },
+      "type": "latency",
+      "spec": {
+        "schema": 4,
+        "dest": "{% address[1] %}",
+        "protocol": "twamp"
+      }
+    },
     "wan-trace": {
       "type": "trace",
       "spec": {
@@ -74,6 +106,7 @@
 
   "schedules": {
     "every-5min":  { "repeat": "PT5M",  "slip": "PT2M", "sliprand": true },
+    "every-15min": { "repeat": "PT15M", "slip": "PT3M", "sliprand": true },
     "every-30min": { "repeat": "PT30M", "slip": "PT5M", "sliprand": true }
   },
 
@@ -138,6 +171,22 @@
       "archives": [ "otel-bridge" ],
       "reference": { "path.id": "wan-cloudflare" }
     },
+    "wan-google-rtt-task": {
+      "group": "wan-google",
+      "test": "wan-rtt",
+      "schedule": "every-5min",
+      "tools": [ "ping" ],
+      "archives": [ "otel-bridge" ],
+      "reference": { "path.id": "wan-google" }
+    },
+    "wan-google-trace-task": {
+      "group": "wan-google",
+      "test": "wan-trace",
+      "schedule": "every-30min",
+      "tools": [ "traceroute" ],
+      "archives": [ "otel-bridge" ],
+      "reference": { "path.id": "wan-google" }
+    },
     "wan-blog-rtt-task": {
       "group": "wan-blog",
       "test": "wan-rtt",
@@ -145,6 +194,44 @@
       "tools": [ "ping" ],
       "archives": [ "otel-bridge" ],
       "reference": { "path.id": "wan-blog" }
+    },
+    "wan-sinet-tokyo-owd-task": {
+      "_meta": {
+        "note": "PT15M より短くしない（公開リソースへの配慮。docs/runbook-w2-public-hosts.md）。latency は既定 100 発"
+      },
+      "group": "wan-sinet-tokyo",
+      "test": "wan-owd",
+      "schedule": "every-15min",
+      "tools": [ "twping" ],
+      "archives": [ "otel-bridge" ],
+      "reference": { "path.id": "wan-sinet-tokyo" }
+    },
+    "wan-sinet-tokyo-rtt-task": {
+      "_meta": {
+        "note": "RTT も twping で測る。片道遅延と同一プロトコル・同一パケット系にすることで、非対称（RTT − 片道 − 片道）にプロトコル差が混入しない。Cloudflare / 8.8.8.8 側は ping のままにして両者を別の目的で使う"
+      },
+      "group": "wan-sinet-tokyo",
+      "test": "wan-rtt",
+      "schedule": "every-15min",
+      "tools": [ "twping" ],
+      "archives": [ "otel-bridge" ],
+      "reference": { "path.id": "wan-sinet-tokyo" }
+    },
+    "wan-riken-tsukuba-owd-task": {
+      "group": "wan-riken-tsukuba",
+      "test": "wan-owd",
+      "schedule": "every-15min",
+      "tools": [ "twping" ],
+      "archives": [ "otel-bridge" ],
+      "reference": { "path.id": "wan-riken-tsukuba" }
+    },
+    "wan-riken-tsukuba-rtt-task": {
+      "group": "wan-riken-tsukuba",
+      "test": "wan-rtt",
+      "schedule": "every-15min",
+      "tools": [ "twping" ],
+      "archives": [ "otel-bridge" ],
+      "reference": { "path.id": "wan-riken-tsukuba" }
     }
   }
 }

@@ -745,3 +745,142 @@ pSConfig 切替時にまとめて入れる。負荷は ICMP の rtt タスク 1 
 Detector が拾うべき本物のイベントであり、「片方の指標だけ見ていると誤読する」
 という主張の実例にもなっている。しかも**自分の設計の穴を自分の測定系が暴いた**形で、
 Step 8 の「測定系の限界を測定系自身で可視化した」と同じ筋が繰り返されている。
+
+## Step 10: pSConfig 切替 — 測定ノードを LG Gram へ移し、WAN パスを 3 本足した
+
+- 日付: 2026-07-30（切替完了 22:52 JST）
+- 結論: **移行は完了した。** LG Gram が LAN 3 本 + WAN 9 本を担い、**VM のタスクは 0 件**。
+  VM は停止せず起動したまま残してある（ロールバック手段）。
+- 同時に、今日の作業で露呈した設計上の不備 2 つを直した。
+  **参照パスが Cloudflare 1 本しかない**（Step 9）ことと、
+  **片道遅延の品質ゲートが LAN 専用の値だった**こと。
+
+### 変更点
+
+| 対象 | 変更 |
+|---|---|
+| `bridge/psotel/convert.py` | `DELAY_CEILING_MS` を float → dict。LAN 5.0 / WAN 200.0 / 既定 50.0 |
+| `deploy/psconfig/home-lab-mesh.json` | `vm` → `lggram` に改名、公開ホスト 2 台 + 8.8.8.8 を追加。groups 3・test 1・schedule 1・tasks 6 を追加 |
+| `deploy/splunk/charts/wan-owd.json` | 新規。WAN の片道遅延・同一プロトコル RTT・clock_error の 3 系列 |
+| `deploy/splunk/charts/twamp-delay-gated.json` | watermark 50 → 5。ゲートの説明も書き直し |
+
+### 品質ゲートを `path.id` 別にした理由
+
+`DELAY_CEILING_MS = 50.0` は**ソース中のコメント自身が「WAN で使うなら経路に応じた値に
+変える必要がある」と断っていた**。WAN を本番投入する今日がその日だった。
+
+一律のままだと**二重に間違う**。LAN には 2 桁緩くて 6ms の異常を素通しし、WAN では
+今日 ICEPP で実測した 80〜90ms の輻輳を**無言で捨てる**。後者のほうが悪い。
+捨てたことが誰にも分からない形で捨てるからだ。
+
+TDD で入れた。**RED で落ちたのは 4 ケース中 2 つだけ**だった（`lan-wired` 6.0ms を落とす、
+`wan-sinet-tokyo` 90.0ms を通す）。残り 2 つ（GbE 実測 0.22ms が通る、path.id 無しの 60ms が
+落ちる）は旧実装でも通る回帰ガードで、これは想定どおり。
+
+### つまずき: LG Gram の agent は着手時点でクラッシュループしていた
+
+`~/psconfig` が空だったため、イメージ内の既定ファイルがマウントで隠れて
+`psconfig-pscheduler-agent` が起動できずにいた。`deploy/psconfig/README.md` が警告している
+症状そのものが実際に起きていた形になる。
+
+**厄介なのは、外からは正常に見えたこと。** `docker ps` はコンテナを `Up` と表示し、
+`pscheduler troubleshoot` もオールOKを返す（public-hosts.md の着手前チェックがまさにそれ）。
+`systemctl is-active psconfig-pscheduler-agent` を叩いて初めて `activating` だと分かる。
+3 ファイルを配って restart したら一発で `active` になった。
+
+**restart の前に必ず `psconfig validate` を通した。** 既にクラッシュループしている相手に
+不正な定義を入れて restart すると、直そうとしている `status=1/FAILURE` を再発させるだけになる。
+
+### 未確認だった点はどうなったか
+
+| 事前の懸念 | 結果 |
+|---|---|
+| **`wan-owd` の test spec で `source` 省略が pSConfig のスキーマを通るか** | **通った。** `psconfig validate` はオールOK。CLI で通ったからスキーマでも通るとは限らないと見ていたが、杞憂だった |
+| メッシュ変更の反映に agent 再起動が必須か | **未確認のまま。** 慣習どおり restart した |
+| `exclusive` がエージェント全体を止めるのか LAN グループだけか | **未確認のまま。** 切替後に WAN 系列の時刻の乱れとして観察できる |
+
+もう 1 つ、事前に想定していなかった挙動: **`psconfig pscheduler-tasks` は agent が 1 回
+走り終えるまで `Unable to find last guid in ...` を返す。** restart 直後に叩いて空振りしたが
+異常ではない。LG Gram では 2 分弱かかった。
+
+### 反映の順序と、意図的な二重測定
+
+**LG Gram → RasPi → VM** の順で restart した。新しい測定を先に立ち上げてから古い方を畳むので、
+その間（数分）だけ LG Gram 発の新 LAN タスクと VM 発の旧 LAN タスクが同時に RasPi へ向かう。
+**欠測を避けるための意図的なトレードオフ。** Splunk 側にも `ps.source` 違いの系列が並んだ。
+
+```
+lan-wired  192.168.1.102 → 192.168.1.101   （新）
+lan-wired  192.168.1.104 → 192.168.1.101   （旧・この直後に止まった）
+```
+
+### 検証結果
+
+| 項目 | 結果 |
+|---|---|
+| `pytest`（bridge） | **52 passed**（48 → 新規 4 ケース） |
+| LG Gram の agent | **`active`**（クラッシュループ解消） |
+| LG Gram の生成タスク | **12 件** = LAN 3（rtt/latency/throughput）+ WAN 9 |
+| RasPi の生成タスク | **3 件**（LAN の逆方向。RasPi も自分が source のタスクを作る） |
+| VM の生成タスク | **0 件**。`pscheduler schedule PT20M` も `Nothing scheduled`。**VM 自体は起動したまま** |
+| `psconfig validate` | LG Gram・RasPi とも `pSConfig JSON is valid` |
+| Splunk への着弾 | `wan-sinet-tokyo` / `wan-riken-tsukuba` / `wan-google` の 3 path.id とも着弾 |
+| `wan-owd` チャート | delay・rtt・clock_error の 3 系列とも点あり |
+
+> **プラン記載の「WAN 8 本」は数え間違いだった。** 既存 WAN 3 本（cloudflare rtt/trace、
+> blog rtt）+ 新規 6 本 = **9 本**が正しい。実機の生成数と一致している。
+
+### 最初の本番データが Step 8 の結論を裏書きした
+
+切替後 1 時間の実測（Splunk から取得）:
+
+| path.id | 片道 (A) | twping RTT (B) | 復路 = B − A | 非対称 | `max-clock-error` |
+|---|---|---|---|---|---|
+| `wan-sinet-tokyo` | 3.88 ms | 7.770 ms | 3.89 ms | **+0.01 ms** | 0.22 ms |
+| `wan-riken-tsukuba` | 4.74 ms | 9.417 ms | 4.68 ms | **−0.06 ms** | 0.25 ms |
+
+Step 8 の手動再測定（東京 −0.00 / つくば −0.04）と一致した。**100M USB NIC 時代の
++0.86 / +0.84ms が機材由来だったという結論を、本番の定点観測が独立に裏書きした形**になる。
+
+ただし**これは n=1 であり、断定の材料ではない**。片道と RTT は別タスクで PT15M・`sliprand: true`
+なので**同時刻に測っていない**し、非対称の大きさ（0.01〜0.06ms）は `max-clock-error`
+（0.22〜0.25ms）より 1 桁小さい。**誤差以下の値が誤差以下のまま出ている**というのが正確な読み。
+価値があるのは「消えたままである」ことの継続的な確認であって、この 2 行の数字ではない。
+
+### Splunk の時系列がここで一度切れる
+
+`ps.source` / `ps.destination` でグルーピングしている系列は、**`192.168.1.104` が止まり
+`192.168.1.102` が 0 から始まる**。対象は `lan-rtt` / `twamp-delay-gated` / `packet-loss` と
+Detector の `lan-rtt-degraded` / `lan-throughput-degraded`。
+
+**ダッシュボードを見た人（記事の読者を含む）には「データが消えた」に見える。**
+断絶の日時（2026-07-30 22:52 JST）と理由を CLAUDE.md と runbook に明記した。
+
+なお WAN 側は `ps.destination` が変わらないため `wan-cloudflare` / `wan-blog` の系列も
+`ps.source` が `lima-perfsonar-vm` → `lggram-testpoint` に変わって引き直しになる。
+
+### LAN の片道遅延はこれから「まばら」になる
+
+Step 8 で判明したとおり、GbE 化で LAN の片道遅延は測定精度の床に当たり、負値や
+`Not Reported` が頻出する。ゲートの `0 < median` に落ちるので、**`twamp-delay-gated` の
+LAN 系列は今後まばらになる。** 実際、切替直後の 1 時間で RasPi → LG Gram 方向の
+`delay.median` は 1 点も出ていない（RTT は出ている）。
+
+**これは不具合ではなく実態の反映である。** チャートの description にもそう書いた。
+
+### 切替後 24〜48 時間の監視項目（Exit Criteria とは別）
+
+- **`packet-loss` Detector の誤発火。** WAN は PT15M なので 12 分窓に 2 点入らず実質発火しない
+  想定だが、`sliprand: true` で偶然 2 点が接近する可能性は排除できない。severity は `Major`
+- **`wan-rtt-sudden-change` の挙動。** `against_recent` が `historical_window='4h'` を使うため、
+  新パスは投入直後に 4 時間分の履歴を持たない。少ないサンプルで誤発火しないか
+- **間欠 TWAMP ロスの再発。** Step 8 で最大 60/100 を観測しており、
+  「NIC が原因だと示せなかった」であって無実の証明ではない
+- **系列数の増加。** `packet.loss.ratio` が 1 日で 269 系列に膨らんだ前例がある。
+  切替直後は移行の重複で 10 系列（6 時間窓）。落ち着いたら再確認する
+
+### 今回やらなかったこと
+
+- **`limactl stop perfsonar-vm`** — 安定を確認してから別途判断する
+- **Detector の閾値変更** — 新パスのベースラインが貯まるまで触らない
+- **`packet-loss` Detector の PT15M 対応** — 12 分窓に 2 点入らない既知の制約として記録に留める

@@ -1,0 +1,40 @@
+{
+  "name": "WAN 片道遅延と経路非対称 — SINET 東京 / 理研つくば",
+  "description": "公開 perfSONAR ホストまでの片道遅延（twamp）と、同一プロトコルで測った RTT を重ねる。ICMP ではなく twping で RTT を取るのは、非対称にプロトコル差を混入させないため。往路 = delay、復路 = rtt − delay なので、この3系列から経路非対称が目視で読める。品質ゲートの上限は WAN 200ms（bridge/psotel/convert.py の DELAY_CEILING_MS）。ICEPP で観測した 80〜90ms 級の輻輳を捨てない値にしてある",
+  "programText": "delay = data('perfsonar.twamp.delay.median', filter=filter('path.id', 'wan-*')).mean(by=['path.id', 'ps.destination']).publish(label='delay')\nrtt = data('perfsonar.rtt.mean', filter=filter('path.id', 'wan-*') and filter('ps.tool', 'twping')).mean(by=['path.id', 'ps.destination']).publish(label='rtt')\nclock = data('perfsonar.twamp.clock_error', filter=filter('path.id', 'wan-*')).mean(by=['path.id', 'ps.destination']).publish(label='clock_error')",
+  "options": {
+    "type": "TimeSeriesChart",
+    "unitPrefix": "Metric",
+    "colorBy": "Dimension",
+    "defaultPlotType": "LineChart",
+    "showEventLines": false,
+    "stacked": false,
+    "time": { "type": "relative", "range": 86400000, "rangeEnd": 0 },
+    "axes": [
+      {
+        "label": "片道遅延 / RTT (ms)",
+        "min": 0,
+        "highWatermark": 200,
+        "highWatermarkLabel": "DELAY_CEILING_MS['wan-*'] = 200"
+      },
+      {
+        "label": "clock_error (ms)",
+        "min": 0,
+        "highWatermark": 10,
+        "highWatermarkLabel": "CLOCK_ERROR_THRESHOLD_MS = 10"
+      }
+    ],
+    "legendOptions": {
+      "fields": [
+        { "property": "sf_originatingMetric", "enabled": true },
+        { "property": "path.id", "enabled": true },
+        { "property": "ps.destination", "enabled": true }
+      ]
+    },
+    "publishLabelOptions": [
+      { "label": "delay", "displayName": "片道遅延 median（往路）", "plotType": "LineChart", "valueUnit": "Millisecond", "yAxis": 0 },
+      { "label": "rtt", "displayName": "同一プロトコル（twping）の RTT mean", "plotType": "LineChart", "valueUnit": "Millisecond", "yAxis": 0 },
+      { "label": "clock_error", "displayName": "max-clock-error（右軸）", "plotType": "ColumnChart", "valueUnit": "Millisecond", "yAxis": 1 }
+    ]
+  }
+}

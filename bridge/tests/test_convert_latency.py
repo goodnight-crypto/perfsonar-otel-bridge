@@ -11,13 +11,16 @@ def find(metrics, name):
     return found[0]
 
 
-def latency_envelope(*, max_clock_error, histogram):
-    """clock error とヒストグラムだけを変えた latency 封筒を組む。"""
+def latency_envelope(*, max_clock_error, histogram, path_id=None):
+    """clock error・ヒストグラム・path.id だけを変えた latency 封筒を組む。
+
+    path_id を省略すると reference は null（手動 task 相当）になる。
+    """
     return {
         "test": {"type": "latency", "spec": {"dest": "192.168.1.101", "source": "192.168.1.104"}},
         "participants": ["192.168.1.104"],
         "tool": {"name": "twping"},
-        "reference": None,
+        "reference": {"path.id": path_id} if path_id else None,
         "run": {"end-time": "2026-07-27T05:46:15+00:00"},
         "result": {
             "packets-sent": 100,
@@ -111,6 +114,41 @@ def test_plausible_delay_still_passes_both_gates():
     envelope = latency_envelope(max_clock_error=4.8, histogram={"2.4": 1, "2.5": 1, "2.6": 1})
 
     assert find(convert(envelope), "perfsonar.twamp.delay.median").value == 2.5
+
+
+def test_lan_delay_passes_at_the_observed_gbe_value():
+    # GbE 化後の LAN 実測は中央値 0.220ms（experiments/w3-notes.md Step 8）。
+    # 上限を 5.0 に絞っても正常値は通ること
+    envelope = latency_envelope(
+        max_clock_error=0.32, histogram={"0.21": 1, "0.22": 1, "0.23": 1}, path_id="lan-wired"
+    )
+
+    assert find(convert(envelope), "perfsonar.twamp.delay.median").value == 0.22
+
+
+def test_lan_delay_is_gated_above_the_lan_ceiling():
+    # LAN の上限は 5.0ms。旧 50.0 なら通っていた 6.0ms を落とす
+    envelope = latency_envelope(
+        max_clock_error=0.3, histogram={"6.0": 3}, path_id="lan-wired"
+    )
+
+    assert "perfsonar.twamp.delay.median" not in names(convert(envelope))
+
+
+def test_wan_delay_survives_congestion_that_the_lan_ceiling_would_reject():
+    # ICEPP で観測した 80〜90ms の輻輳は WAN では実在する値。旧 50.0 では捨てていた
+    envelope = latency_envelope(
+        max_clock_error=0.5, histogram={"90.0": 3}, path_id="wan-sinet-tokyo"
+    )
+
+    assert find(convert(envelope), "perfsonar.twamp.delay.median").value == 90.0
+
+
+def test_delay_without_path_id_falls_back_to_the_default_ceiling():
+    # 手動 task は reference が null。既定の 50.0 が効く
+    envelope = latency_envelope(max_clock_error=0.5, histogram={"60.0": 3})
+
+    assert "perfsonar.twamp.delay.median" not in names(convert(envelope))
 
 
 def test_clock_error_is_emitted_as_a_metric(sample):

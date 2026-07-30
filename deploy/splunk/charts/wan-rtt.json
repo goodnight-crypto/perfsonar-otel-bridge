@@ -1,6 +1,6 @@
 {
-  "name": "WAN RTT — 1.1.1.1 / 8091.info",
-  "description": "ISP 品質の基準点と自ブログのエッジまでの往復遅延。実測中央値 9.03–9.12ms、p95 9.76–9.82ms",
+  "name": "WAN RTT — 商用網2本 / 公開 perfSONAR 2台 / 自ブログ",
+  "description": "path.id: wan-* の往復遅延。1.1.1.1 と 8.8.8.8 は同じ ping・同じ5分間隔にしてあり、片方だけが跳ねたら『自宅ではなくその経路が悪い』と切り分けられる（Cloudflare 1本だけだった頃に 8.9→122ms の遠回りが起きて区別できなかった）。SINET 東京・理研つくばは twping の RTT（片道遅延と同一プロトコル。非対称の算出に使う）。1.1.1.1 / 8091.info の実測中央値は 9.03–9.12ms、p95 9.76–9.82ms",
   "programText": "mean = data('perfsonar.rtt.mean', filter=filter('path.id', 'wan-*')).mean(by=['path.id', 'ps.destination']).publish(label='mean')",
   "options": {
     "type": "TimeSeriesChart",
