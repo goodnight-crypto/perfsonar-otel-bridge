@@ -23,7 +23,11 @@ LG Gram は RJ45 を内蔵せず、USB Ethernet アダプタを使う。USB NIC 
 
 - LG Gram 13Z970 本体と AC アダプタ（**常時給電で運用するため必須**）
 - USB メモリ 4GB 以上 1本。**インストーラ書き込み時に中身が消える**ため、必要なデータがないか事前確認
-- USB Ethernet アダプタ（手持ちのもの）と LAN ケーブル
+- USB Ethernet アダプタと LAN ケーブル。**1000Base-T 対応品であること**
+
+  > 2026-07-30 の実施時、手持ちのアダプタが 100Base-TX 品だった（`r8152` / Speed 100Mb/s）。
+  > 100M でも片道遅延・RTT・ロス率は測れるが、**throughput が上限 94Mbps で頭打ちになり、
+  > GbE 前提のベースライン（929〜940Mbps）と一桁ずれる。** `experiments/w3-notes.md` Step 1 参照
 - ルーター/スイッチの空きポート。RasPi と**同一 LAN セグメント**であること
 - Mac（ISO のダウンロードと USB メモリへの書き込み）
 
@@ -198,9 +202,18 @@ sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.ta
 lsusb                                   # チップの型番（RTL8153 / AX88179 など）
 ip -br link                             # インターフェース名
 sudo ethtool -i <IF名>                  # ドライバ名
-sudo ethtool <IF名> | grep -i speed     # 1000Mb/s であること
+sudo ethtool <IF名>                     # フル出力。下記2行を見る
 sudo ethtool -T <IF名>                  # タイムスタンプ対応
 ```
+
+`ethtool` のフル出力では2か所を見る。
+
+- `Speed:` が **1000Mb/s** であること
+- `Supported link modes:` に **1000baseT** が含まれること
+
+`Speed` が 100Mb/s でも `Supported link modes` に 1000baseT があれば、**アダプタは GbE で
+ケーブルかスイッチポート側が原因**である。カテゴリ 5e 以上のケーブルに替え、ポートを変えて再確認する。
+`Supported link modes` に 1000baseT が無ければアダプタ自体が 100M 品なので、GbE 品に買い替える。
 
 `ethtool -T` の読み方は次のとおり。
 
