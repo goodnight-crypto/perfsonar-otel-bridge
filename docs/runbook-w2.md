@@ -420,11 +420,20 @@ limactl shell perfsonar-vm bash -lc 'chronyc tracking | grep -E "System time|Fre
 
 ### 片道遅延の扱い
 
-TWAMP の片道遅延（`perfsonar.twamp.delay.median`）は `ps.max_clock_error` による品質ゲートを
+TWAMP の片道遅延（`perfsonar.twamp.delay.median`）は**2段の品質ゲート**
+（`clock_error <= 10ms` かつ `0 < median <= 50ms`。`bridge/psotel/convert.py`）を
 通ったときだけ出力される。注入実験では **「RTT では 100ms の跳ね上がりが明確に見えた」と
 「片道遅延はゲートの状態次第で欠測になりうる」の対比**として扱う。クロックオフセットが一定だと
 仮定して片道遅延の変化量から結論を出すことはしない（W1 でドリフトが断続的なステップ補正である
 ことが判明しているため。experiments/w1-notes.md:71 参照）。
+
+> ゲートの根拠になる値は `perfsonar.twamp.clock_error` メトリクスで追える。
+> `ps.max_clock_error` **dimension は廃止済み**（コミット `1772259` でメトリクス化した）。
+>
+> **時間帯によって棄却率が大きく変わる。** 深夜（00:00〜07:00）は vz のクロック飢餓で
+> `clock_error` が 1000ms 級まで跳ね、24時間の40%が 10ms 超になる。
+> 日中は 0.15〜0.25ms。注入実験は日中に実施すること
+> （experiments/w2-notes.md Step 16）。
 
 ---
 

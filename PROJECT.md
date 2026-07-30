@@ -100,9 +100,20 @@ Zenn 記事投稿コンテスト「OpenTelemetryの知見を、記事にしよ�
       - 原因は **Ubuntu 既定の `pool ntp.ubuntu.com` が RTT 256.8ms** だったこと。
         国内源（NICT / IIJ mfeed / Cloudflare）へ差し替え。設定は `deploy/vm/` として repo 化
       - root dispersion 37.7ms → 0.125ms、max-clock-error 21-23ms → **0.19ms**
-      - 「VM のクロックが構造的に不安定」は**誤診**だった。experiments/w2-notes.md Step 14
-      - ただし片道遅延の実測値は依然 **負値**（-0.26ms）。自己申告 0.19ms に対し実際の
-        相対オフセットは 0.7ms 程度あり、**LAN の片道遅延は NTP の精度の外側**という結論
+      - experiments/w2-notes.md Step 14。**ただし Step 16 で訂正あり（下記）**
+- [ ] **未解決: vz のクロック飢餓（深夜のみ）** — experiments/w2-notes.md Step 16
+      - 実は**2つの独立した問題が重なっていた**。時刻源の修復で直ったのは片方だけ
+      - 深夜 00:00〜07:00 に chrony のステップ補正が**一晩270回・最大 5.79 秒**。
+        `clock_error` は最大 1156ms、24時間の40%が 10ms 超。07:00 以降はステップ0回・0.15〜0.25ms
+      - RasPi は同時刻帯に timesyncd のログが1件も無く、Mac もスリープしていない。
+        ホスト側のスケジューリングで VM のクロックが飢餓状態になっている
+      - 品質ゲートは正しく棄却しているので壊れた値はグラフに出ていない
+      - 次の一手: 深夜に Mac 側で何が走っているかの特定 → 特定できなければ bare metal 化の検討
+- [ ] **W3 課題: RasPi の時刻同期を VM と対称にする**
+      - 片道遅延はゲートを通って蓄積されているが、RTT 0.95ms に対し 0.01〜2.27ms の
+        鋸歯状で、まだネットワーク遅延ではなく相対クロック誤差を測っている
+      - 日中に限れば VM（RMS offset 20.9µs / poll 16-64s）のほうが
+        RasPi（Jitter 2.620ms / poll 34分8秒）より2桁良い。RasPi に chrony を入れて揃える
 - [x] 実験: tc netem で遅延 100ms・ロス 3% 注入 → Detector 発火 → 復旧（2026-07-29 21:20〜21:36）
       - RTT 0.93→105ms、ロス 0→2〜6%、スループット 940→241Mbps、WAN RTT 9→115ms
       - Detector は RTT（双方向）・スループット・WAN 異常検知の**3種が発火**
