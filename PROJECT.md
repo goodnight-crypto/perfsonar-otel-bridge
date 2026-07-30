@@ -113,16 +113,19 @@ Zenn 記事投稿コンテスト「OpenTelemetryの知見を、記事にしよ�
         W2 の成果と netem 実験の結論はそのまま有効
       - **W2 Step 0 の設計判断（LAN 基準線は twamp 片道遅延ではなく rtt + twping）に救われた。**
         パイプラインは片道遅延に依存していない
-- [ ] **判断待ち: 片道遅延を測るなら測定ノードを Lima の外に出す（W4 候補）**
-      - bare metal（手元の LG Gram 13Z970 等）または時刻同期を強制しない仮想化
-      - 確認事項: RJ45 の有無（無ければ USB NIC はジッタで逆効果）、`ethtool -T` で
-        ハードウェアタイムスタンプ対応、2017年機のバッテリー膨張
-      - 片道遅延を諦めるなら現状維持で問題ない
-- [ ] **W3 課題: RasPi の時刻同期を VM と対称にする**
+- [x] **判断済み（2026-07-30）: 測定ノードを Lima の外に出す。W4 候補から W3 に昇格**
+      - 片道遅延を諦めて現状維持という選択肢もあったが、**bare metal 化を実施する**と決めた
+      - 移行先は手元の LG Gram 13Z970。Windows 10 → Ubuntu Server 24.04 LTS で全消去
+      - **完全置き換え**（testpoint #1 を引き継ぎ、VM は停止）。ただし削除はせず
+        `limactl stop` に留めてロールバック手段を残す
+      - 手順は `docs/lggram-kitting.md`。実施は W3（下記）
+- [ ] **W3 課題: RasPi の時刻同期を測定ノードと対称にする**
       - 片道遅延はゲートを通って蓄積されているが、RTT 0.95ms に対し 0.01〜2.27ms の
         鋸歯状で、まだネットワーク遅延ではなく相対クロック誤差を測っている
       - 日中に限れば VM（RMS offset 20.9µs / poll 16-64s）のほうが
         RasPi（Jitter 2.620ms / poll 34分8秒）より2桁良い。RasPi に chrony を入れて揃える
+      - **bare metal 移行後は対称化の相手が LG Gram になる。** 両端に同じ
+        `deploy/vm/chrony-home-lab.conf` を配る形にすると、時刻源の差を変数から外せる
 - [x] 実験: tc netem で遅延 100ms・ロス 3% 注入 → Detector 発火 → 復旧（2026-07-29 21:20〜21:36）
       - RTT 0.93→105ms、ロス 0→2〜6%、スループット 940→241Mbps、WAN RTT 9→115ms
       - Detector は RTT（双方向）・スループット・WAN 異常検知の**3種が発火**
@@ -133,7 +136,23 @@ Zenn 記事投稿コンテスト「OpenTelemetryの知見を、記事にしよ�
       - Collector は全区間で送出継続（失敗0）。archivings も全 run 1回目で成功し再送は不要だった
 - [ ] AI Assistant に原因調査させて記録（W3）
 
-### W3（〜8/9）執筆と公開
+### W3（〜8/9）測定ノードの bare metal 化・執筆と公開
+
+**この週は「片道遅延を取り戻す」作業と執筆が並走する。前者が転んでも記事は書ける構成**
+（RTT / ロス / スループットのパイプラインは片道遅延に依存していない）**なので、
+執筆を止めてまで移行を追わない。** 移行の期限は 8/5 とし、それまでに片道遅延の
+まともなデータが取れなければ「Lima では測れないことを示した」という結論のまま記事にする。
+
+- [ ] **LG Gram 13Z970 を bare metal の testpoint 化**（手順書: `docs/lggram-kitting.md`）
+      - [ ] Step A-F: Ubuntu Server 24.04 LTS 導入 〜 SSH 到達【ユーザー作業】
+      - [ ] Step G: runbook-w1 Step 1 に合流（Docker / chrony / testpoint / troubleshoot）
+      - [ ] `deploy/psconfig/home-lab-mesh.json` の `addresses.vm` を差し替えて pSConfig 再適用
+      - [ ] CLAUDE.md の環境インベントリと「よく使うコマンド」を更新
+      - [ ] **切替判定**: 片道遅延が RTT（0.95ms）と整合するか。ステップ補正が消えたか。
+        `max-clock-error` の棄却率。判定できたら `limactl stop perfsonar-vm`
+      - [ ] `ethtool -T` の実測を `experiments/w3-notes.md` に記録（USB NIC の精度限界の一次証拠）
+- [ ] RasPi に chrony を導入して両端の時刻源を対称にする（上記 W2 の積み残し）
+- [ ] AI Assistant に netem 実験の原因調査をさせて記録（上記 W2 の積み残し）
 - [ ] Zenn 記事執筆（構成案は下記）・スクショ整理
 - [ ] リポジトリ public 化（公開前チェックリスト実施）
 - [ ] 記事公開 → コンテスト応募（バッファ 8/9-8/10）
