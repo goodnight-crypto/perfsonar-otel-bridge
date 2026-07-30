@@ -95,45 +95,81 @@ limactl shell perfsonar-vm docker exec perfsonar-testpoint \
 | 問題1 | 終日 `clock_error` 20ms 前後、root dispersion 37.7ms | 遠距離 NTP 源（RTT 257ms） | **このファイルで解決** |
 | 問題2 | 深夜のみ 0.6〜5.8 秒のステップ補正、`clock_error` 1156ms | vz のクロック飢餓 | **未解決** |
 
-### 問題2: 深夜のクロック飢餓（未解決）
+### 問題2: Lima がゲストのクロックを毎分上書きしている（設定では直らない）
 
-| 時間帯 | chrony のステップ補正 | `clock_error` |
-|---|---|---|
-| 00:00〜07:00 | **270回**、最大 **5.79 秒** | 最大 1156ms、10ms超が40% |
-| 07:00〜現在 | **0回** | 0.15〜0.25ms |
+**Lima のホストエージェントは10秒ごとにゲストのクロックを監視し、
+閾値（約100ms）を超えたらホスト時刻に強制上書きする。**
+`~/.lima/perfsonar-vm/ha.stderr.log` に記録が残る:
 
 ```
-03:04:27  Can't synchronise: no majority
-03:04:30  System clock was stepped by 2.222625 seconds
-03:04:48  System clock was stepped by 1.725027 seconds
-   （15〜20秒おきに、7時間で270回）
+03:00:02  Time sync: guest clock adjusted (was 2464ms off)
+03:00:12  Time sync: guest clock adjusted (was 648ms off)
+03:00:22  Time sync: drift 0ms within threshold
+03:00:42  Time sync: guest clock adjusted (was 5400ms off)
 ```
 
-秒単位のズレを補正して20秒後にまた秒単位ズレる、を一晩繰り返している。
-**5.79 秒のジャンプは NTP 源の品質では説明できない。**
+ゲスト側では時刻が**巻き戻る**:
 
-原因の切り分け:
+```
+lima-guestagent: SyncTime: system time synchronized with host (drift was 5.785047093s)
+systemd-journald: Time jumped backwards, rotating.
+```
 
-- RasPi は同時刻帯に `systemd-timesyncd` のログが**1件も無い**（`-- No entries --`）
-- Mac は**スリープしていない**（`pmset -g log` に 00:00〜07:00 のイベント無し）
-- したがってスリープではなく、**ホスト側のスケジューリングで vz の VM の
-  クロックが飢餓状態になっている**
+VM 作成（2026-07-26）からの実績:
 
-確認コマンド:
+| | |
+|---|---|
+| 監視ポーリング | **27,452 回**（10秒間隔） |
+| 実際に上書きした回数 | **4,734 回**（約15%） |
+| 頻度 | 89.6時間で 4,734 回 = **約68秒に1回** |
+| drift 中央値 | **123 ms** |
+| drift p90 / p99 | 1,468 ms / 3,618 ms |
+| drift 最大 | **6,725 ms** |
+| 1秒超の上書き | **518 回（10.9%）** |
+
+chrony は `makestep 0.1 -1` なので 100ms 未満は slew、それ以上でステップする。
+**chrony は常に負け続けている。**
+
+#### 無効化できない
+
+- `lima-guestagent daemon` のフラグは `--tick` / `--runtime-dir` / `--socket-owner` /
+  `--virtio-port` / `--vsock-port` のみ。**時刻同期を切るものは無い**
+- Lima のデフォルトテンプレート（`limactl tmpl copy template://default`）にも設定項目が無い
+- `--plain` はマウント・ポートフォワード・containerd ごと落とすので代替にならない
+
+**これは Lima の設計意図**（ゲストの時刻をホストに追従させる）であってバグではない。
+開発用 VM としては正しい動作だが、**自前の NTP 規律と正直な誤差申告が要る
+測定ノードとは根本的に両立しない。**
+
+#### 影響範囲
+
+| メトリクス | 影響 |
+|---|---|
+| `rtt.mean` / `rtt.max`（twping） | **なし**（クロック非依存） |
+| `packet.loss.ratio` | **なし** |
+| `throughput.bps` / `retransmits` | **なし** |
+| `trace.hops` | **なし** |
+| `twamp.delay.median`（片道遅延） | **測定不能**。測りたい量が 0.5ms なのに、クロックが68秒ごとに中央値 123ms 上書きされる |
+
+W2 Step 0 で「LAN 区間の RTT は `latency`(twamp) ではなく `rtt` テストを `--tool twping`
+で実行する」と決めていたため、**パイプラインは片道遅延に依存していない。**
+品質ゲートが壊れた値を落としているので、データの正しさも保たれている。
+
+#### 確認コマンド
 
 ```bash
-# 深夜のステップ補正の回数と最大値
-limactl shell perfsonar-vm bash -lc \
-  'journalctl -u chrony --since "00:00" --until "07:00" --no-pager | grep -c "was stepped"'
-limactl shell perfsonar-vm bash -lc \
-  'journalctl -u chrony --since "00:00" --until "07:00" --no-pager \
-   | grep -oE "stepped by [0-9.-]+" | sort -g -k3 | tail -3'
+# 上書きの総数と drift の分布
+grep -ac 'guest clock adjusted' ~/.lima/perfsonar-vm/ha.stderr.log
+grep -ao 'was [0-9]*ms off' ~/.lima/perfsonar-vm/ha.stderr.log \
+  | grep -o '[0-9]*' | sort -n | tail -3
 ```
 
-次の一手: **深夜に Mac 側で何が走っているかを特定する。** Time Machine や
-インデックス再構築のような特定可能なものならスケジュールをずらすだけで済む。
-特定できなければ、測定ノードを bare metal に移すことの実測的な根拠になる
-（物理マシンでは起きないことを RasPi が実証している）。
+#### 次の一手
+
+**片道遅延を測りたいなら、測定ノードを Lima の外に出す**しかない
+（bare metal、または時刻同期を強制しない仮想化）。
+物理マシンではこれが起きないことを RasPi が同期間で実証している。
+片道遅延を諦めるなら現状のままで問題ない。
 
 ## さらに詰めるなら
 

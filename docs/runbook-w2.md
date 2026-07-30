@@ -430,10 +430,10 @@ TWAMP の片道遅延（`perfsonar.twamp.delay.median`）は**2段の品質ゲ�
 > ゲートの根拠になる値は `perfsonar.twamp.clock_error` メトリクスで追える。
 > `ps.max_clock_error` **dimension は廃止済み**（コミット `1772259` でメトリクス化した）。
 >
-> **時間帯によって棄却率が大きく変わる。** 深夜（00:00〜07:00）は vz のクロック飢餓で
-> `clock_error` が 1000ms 級まで跳ね、24時間の40%が 10ms 超になる。
-> 日中は 0.15〜0.25ms。注入実験は日中に実施すること
-> （experiments/w2-notes.md Step 16）。
+> **棄却率は Lima の時刻上書きに左右される。** ホストエージェントが約68秒ごとに
+> ゲストのクロックを上書きしており（中央値 123ms、最大 6,725ms）、`clock_error` が跳ねる。
+> 24時間の40%が 10ms 超。RTT / ロス / スループットはクロック非依存で無影響
+> （experiments/w2-notes.md Step 17）。
 
 ---
 
