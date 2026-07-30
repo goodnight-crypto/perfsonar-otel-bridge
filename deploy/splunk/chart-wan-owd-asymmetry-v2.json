@@ -1,0 +1,88 @@
+{
+  "name": "WAN 片道遅延と経路非対称 — SINET 東京 / 理研つくば",
+  "description": "公開 perfSONAR ホストまでの片道遅延（twamp）と、同一プロトコルで測った RTT、そして復路の推定値（RTT − OWD）を重ねる。ICMP ではなく twping で RTT を取るのは、非対称にプロトコル差を混入させないため。v2: 従来は読者が頭の中で rtt − delay を引き算する必要があったが、復路系列を SignalFlow で計算して直接描画する。delay と rtt は別タスクで測定時刻がズレるため、両者を 15 分移動平均で平滑化して位相を揃えてから減算する（引き算のための位相合わせであり、生値の delay/rtt チャートとは役割が違う）。復路が瞬間的に負値になる場合があるが、これは平滑化残差とクロック誤差によるもので、非対称の議論は誤差より十分大きい差にのみ立脚する（PROJECT.md の経路非対称の項と同じ規律）。品質ゲートの上限は WAN 200ms（bridge/psotel/convert.py の DELAY_CEILING_MS）。",
+  "programText": "delay_raw = data('perfsonar.twamp.delay.median', filter=filter('path.id', 'wan-*')).mean(by=['path.id', 'ps.destination'])\nrtt_raw = data('perfsonar.rtt.mean', filter=filter('path.id', 'wan-*') and filter('ps.tool', 'twping')).mean(by=['path.id', 'ps.destination'])\ndelay = delay_raw.mean(over='15m')\nrtt = rtt_raw.mean(over='15m')\nreverse = (rtt - delay)\ndelay.publish(label='delay')\nrtt.publish(label='rtt')\nreverse.publish(label='reverse')\nclock = data('perfsonar.twamp.clock_error', filter=filter('path.id', 'wan-*')).mean(by=['path.id', 'ps.destination']).publish(label='clock_error')",
+  "options": {
+    "type": "TimeSeriesChart",
+    "defaultPlotType": "LineChart",
+    "colorBy": "Dimension",
+    "includeZero": false,
+    "stacked": false,
+    "unitPrefix": "Metric",
+    "axes": [
+      {
+        "label": "片道遅延 / RTT (ms, 15分平滑)",
+        "min": 0,
+        "max": null,
+        "highWatermark": 200,
+        "highWatermarkLabel": "DELAY_CEILING_MS['wan-*'] = 200",
+        "lowWatermark": null,
+        "lowWatermarkLabel": null
+      },
+      {
+        "label": "clock_error (ms)",
+        "min": 0,
+        "max": null,
+        "highWatermark": 10,
+        "highWatermarkLabel": "CLOCK_ERROR_THRESHOLD_MS = 10",
+        "lowWatermark": null,
+        "lowWatermarkLabel": null
+      }
+    ],
+    "legendOptions": {
+      "fields": [
+        { "enabled": true, "property": "sf_originatingMetric" },
+        { "enabled": true, "property": "path.id" },
+        { "enabled": true, "property": "ps.destination" }
+      ]
+    },
+    "publishLabelOptions": [
+      {
+        "displayName": "往路 OWD median（15分平滑）",
+        "label": "delay",
+        "paletteIndex": null,
+        "plotType": "LineChart",
+        "valuePrefix": null,
+        "valueSuffix": null,
+        "valueUnit": "Millisecond",
+        "yAxis": 0
+      },
+      {
+        "displayName": "twping RTT mean（15分平滑）",
+        "label": "rtt",
+        "paletteIndex": null,
+        "plotType": "LineChart",
+        "valuePrefix": null,
+        "valueSuffix": null,
+        "valueUnit": "Millisecond",
+        "yAxis": 0
+      },
+      {
+        "displayName": "復路 推定 = RTT − OWD",
+        "label": "reverse",
+        "paletteIndex": null,
+        "plotType": "LineChart",
+        "valuePrefix": null,
+        "valueSuffix": null,
+        "valueUnit": "Millisecond",
+        "yAxis": 0
+      },
+      {
+        "displayName": "max-clock-error（右軸・生値）",
+        "label": "clock_error",
+        "paletteIndex": null,
+        "plotType": "ColumnChart",
+        "valuePrefix": null,
+        "valueSuffix": null,
+        "valueUnit": "Millisecond",
+        "yAxis": 1
+      }
+    ],
+    "showEventLines": false,
+    "time": {
+      "type": "relative",
+      "range": 86400000,
+      "rangeEnd": 0
+    }
+  }
+}

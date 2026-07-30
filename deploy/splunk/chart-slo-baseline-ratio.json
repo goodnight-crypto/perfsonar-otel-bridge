@@ -1,0 +1,56 @@
+{
+  "name": "SLOビュー — 全パスRTT / 直近24hベースライン比",
+  "description": "LAN 1msとWAN 9msを生値で重ねるとスケールが崩壊するため、各パスを自身の直近24h中央値で正規化して重ねる。平常時は全パスが1.0に張り付き、逸脱だけが浮く=『パスをサービスとみなしてSLOを張る』の視覚化。注意: ローリングベースラインは長時間の異常を徐々に取り込むため、恒常監視の一次判定はDetector側（絶対閾値/against_recent）が担い、このチャートは俯瞰用。各パスに24h分のデータが溜まるまで系列は出ない（WAN公開ホスト3系列は2026-07-31 23時頃から有効）。",
+  "programText": "rtt = data('perfsonar.rtt.mean').mean(by=['path.id'])\nbase = rtt.median(over='24h')\nratio = (rtt / base).publish(label='ratio')",
+  "options": {
+    "type": "TimeSeriesChart",
+    "defaultPlotType": "LineChart",
+    "colorBy": "Dimension",
+    "includeZero": true,
+    "stacked": false,
+    "unitPrefix": "Metric",
+    "axes": [
+      {
+        "label": "RTT / 24h中央値 (倍率)",
+        "min": 0,
+        "max": null,
+        "highWatermark": 1.5,
+        "highWatermarkLabel": "+50%",
+        "lowWatermark": 1.0,
+        "lowWatermarkLabel": "ベースライン (1.0)"
+      },
+      {
+        "label": "",
+        "min": null,
+        "max": null,
+        "highWatermark": null,
+        "highWatermarkLabel": null,
+        "lowWatermark": null,
+        "lowWatermarkLabel": null
+      }
+    ],
+    "legendOptions": {
+      "fields": [
+        { "enabled": true, "property": "path.id" }
+      ]
+    },
+    "publishLabelOptions": [
+      {
+        "displayName": "RTT / 24hベースライン比",
+        "label": "ratio",
+        "paletteIndex": null,
+        "plotType": "LineChart",
+        "valuePrefix": null,
+        "valueSuffix": "x",
+        "valueUnit": null,
+        "yAxis": 0
+      }
+    ],
+    "showEventLines": true,
+    "time": {
+      "type": "relative",
+      "range": 86400000,
+      "rangeEnd": 0
+    }
+  }
+}
