@@ -176,8 +176,16 @@ gitleaks dir --redact -v .    # 作業ツリー（.env の2件だけ出るのが
           `.local` は mDNS なので LAN 内でしか解決しない
       - コミットの author は `goodnight-crypto-dev <dev@mac-mini.local>` で、
         **個人のメールアドレスは履歴に含まれていない**
-- [ ] README のクイックスタートを第三者再現可能な状態に更新
-- [ ] LICENSE (MIT) 追加
+- [x] README のクイックスタートを第三者再現可能な状態に更新
+      - 9ステップの具体手順（トークン2種 → .env → 疎通確認 → testpoint → 時刻源 →
+        compose → pSConfig → apply.sh → 着弾確認）に書き換えた
+      - **再現の前提として「IP・ホスト名は作者の LAN 固有」を冒頭に明記。**
+        書き換えが必要なのは `home-lab-mesh.json` の `addresses` と archiver の `_url`
+      - 「既知の制約」節を追加（Lima のクロック上書き / ディストリ既定の NTP 源）
+      - 参照ファイルの存在とメトリクス名8種を実装と突き合わせて検証済み
+- [x] LICENSE (MIT) 追加
+      - Copyright holder は `goodnight-crypto`（GitHub アカウント名）。
+        履歴に個人メールを含めない方針と揃えた。実名にするならここを1行変えるだけ
 
 ## 将来展望（記事のスコープ外）
 
