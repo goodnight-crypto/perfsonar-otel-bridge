@@ -234,3 +234,45 @@ PROJECT.md が W4 候補の時点で書いていた「USB NIC はジッタで逆
 - 判断・回避策:
   - **切替判定は合格。** ただし throughput タスクのみ GbE NIC 到着まで VM 側に残す
   - 次は RasPi への chrony 導入。両端を対称にしてから片道遅延を再測定する
+
+## Step 4: RasPi の時刻源を chrony に統一（両端の対称化）
+
+- 日付: 2026-07-30
+- やったこと: RasPi の `systemd-timesyncd` を chrony に置き換え、
+  LG Gram / VM と同じ `deploy/vm/chrony-home-lab.conf` を配った。
+- 結果 / エラー:
+
+### 移行前（`systemd-timesyncd`）
+
+```
+       Server: 240b:4009:23a:c064:fe41:d658:e951:c18f (2.debian.pool.ntp.org)
+Poll interval: 34min 8s (min: 32s; max 34min 8s)
+       Offset: +1.092ms
+        Delay: 9.776ms
+       Jitter: 1.544ms
+ Packet count: 185
+    Frequency: -9.767ppm
+Root distance: 2.593ms
+```
+
+**時刻源はサーバ1台のみ、ポーリング間隔は 34分8秒。** その間クロックは自由にドリフトする。
+W2 の時点で「片道遅延が RTT 0.95ms に対し 0.01〜2.27ms の鋸歯状になる」原因として
+疑っていた箇所である。
+
+なお OS は **Debian 13 (trixie)**。`docs/raspi-kitting.md` は Bookworm 前提で書いてあるが、
+実機は trixie に上がっている。`confdir /etc/chrony/conf.d` はそのまま使える。
+
+### 設定の配置
+
+Debian の `chrony.conf` は `confdir /etc/chrony/conf.d` を持つため、LG Gram / VM と同じ手順で通る。
+既定の `pool 2.debian.pool.ntp.org iburst` はコメントアウトした。
+
+`sourcedir /run/chrony-dhcp` も設定にあるが**中身は空**で、
+ルーターは DHCP で NTP サーバを配っていない。意図しない時刻源の混入は無い。
+
+### 設定ファイルの置き場所について（要整理）
+
+`chrony-home-lab.conf` は現在 `deploy/vm/` にあるが、**VM・LG Gram・RasPi の3台に
+同じものを配っている。** ファイル冒頭のコメントも「Lima VM の時刻源を差し替える」のままで
+実態と合っていない。`deploy/timesync/` 等へ移すのが素直だが、
+`deploy/vm/README.md` は記事の一次情報を多く含むため、移動はユーザー判断を仰ぐ。
