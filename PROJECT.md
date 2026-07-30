@@ -143,6 +143,10 @@ Zenn 記事投稿コンテスト「OpenTelemetryの知見を、記事にしよ�
 執筆を止めてまで移行を追わない。** 移行の期限は 8/5 とし、それまでに片道遅延の
 まともなデータが取れなければ「Lima では測れないことを示した」という結論のまま記事にする。
 
+> **移行は 2026-07-30 に完了した（期限 8/5 に対して 5 日前倒し）。** 保険として用意していた
+> 「Lima では測れないことを示した」という結論は使わずに済む。**以降、この週の残りは執筆本体**
+> であり、検証側を触るのは非対称の再評価（Step 10）だけに絞る。
+
 - [x] **LG Gram 13Z970 を bare metal の testpoint 化**（手順書: `docs/lggram-kitting.md`）
       - [x] Step A-F: Ubuntu Server 24.04.4 LTS 導入 〜 SSH 到達【ユーザー作業】
       - [x] Step G: runbook-w1 Step 1 に合流（Docker / chrony / testpoint / troubleshoot 全項目 OK）
@@ -150,9 +154,15 @@ Zenn 記事投稿コンテスト「OpenTelemetryの知見を、記事にしよ�
       - [x] **切替判定は合格。** 片道遅延が中央値 0.220ms・負値0発・`max-clock-error` 0.32ms
         （Lima VM では89ビン全てが -11.71〜-11.86ms で全棄却だった）
       - [x] `ethtool -T` の実測を記録（`PTP Hardware Clock: none`、`software-receive` のみ）
-      - [ ] `deploy/psconfig/home-lab-mesh.json` の `addresses.vm` を差し替えて pSConfig 再適用
-            → **GbE NIC 到着待ち（2026-07-30 到着予定）。下記の判断を参照**
-      - [ ] 切替完了後に `limactl stop perfsonar-vm`
+      - [x] `deploy/psconfig/home-lab-mesh.json` の `addresses.vm` を差し替えて pSConfig 再適用
+            → **完了（2026-07-30 22:52 JST）。移行期限 8/5 に対して 5 日前倒し。**
+            `addresses.vm` → `lggram` に改名し、同時に WAN パスを 3 本追加した
+            （experiments/w3-notes.md Step 10）。LG Gram 12 タスク / RasPi 3 タスク / VM 0 タスク
+      - **`limactl stop perfsonar-vm` は当面やらない**（未着手ではなく判断）
+            - 理由: 切替直後の唯一のロールバック手段。VM を止めると旧構成に戻す経路が消える
+            - VM はどのグループにも属さず**タスク 0 件**なので、起動していても測定には影響しない
+            - 再判断の条件: 新構成が安定していること（WAN 系列の 24〜48 時間の監視項目が
+              片付き、`packet-loss` / `wan-rtt-sudden-change` の誤発火が無いこと）
 - [x] RasPi に chrony を導入して両端の時刻源を対称にする（上記 W2 の積み残し）
       - ポーリング 34分8秒 → 64.2秒、root distance 2.593ms → root dispersion 0.405ms
       - **両ノードが同一の `ntp-b2.nict.go.jp`（stratum 1）を参照する状態にした**
