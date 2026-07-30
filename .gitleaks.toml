@@ -1,0 +1,46 @@
+# gitleaks の追加ルール
+#
+#   gitleaks git --redact -v .        # 全履歴
+#   gitleaks dir --redact -v .        # 作業ツリー
+#
+# 既定ルールだけでは Splunk O11y のトークンを拾えない。
+# SignalFx のトークンは 22 文字の base64 風文字列で、汎用の高エントロピー検出では
+# 誤検知が多すぎて実用にならない。代わりに**代入・ヘッダの文脈**でひっかける。
+
+title = "perfsonar-otel-bridge"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "splunk-o11y-token-assignment"
+description = "Splunk O11y のトークンが値付きで書かれている（.env 以外に置いてはいけない）"
+regex = '''(?i)(SPLUNK_ACCESS_TOKEN|SPLUNK_API_TOKEN|SFX_(ACCESS_)?TOKEN)\s*[:=]\s*['"]?([A-Za-z0-9_\-]{20,})['"]?'''
+secretGroup = 3
+[rules.allowlist]
+# プレースホルダは通す
+regexes = [
+  '''changeme''',
+  '''YOUR_[A-Z_]+''',
+  '''<[^>]+>''',
+  '''\$\{?[A-Za-z_]''',
+  '''us1''',
+]
+
+[[rules]]
+id = "splunk-o11y-token-header"
+description = "X-SF-TOKEN ヘッダにトークンが直書きされている"
+regex = '''(?i)X-SF-TOKEN\s*:\s*['"]?([A-Za-z0-9_\-]{20,})['"]?'''
+secretGroup = 1
+[rules.allowlist]
+regexes = [
+  '''\$\{?[A-Za-z_]''',
+  '''changeme''',
+]
+
+[allowlist]
+description = "リポジトリ全体の除外"
+paths = [
+  '''\.env\.example$''',
+  '''\.gitleaks\.toml$''',
+]

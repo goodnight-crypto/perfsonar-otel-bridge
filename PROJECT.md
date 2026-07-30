@@ -150,9 +150,32 @@ Zenn 記事投稿コンテスト「OpenTelemetryの知見を、記事にしよ�
 
 ## 公開前チェックリスト（public 化時）
 
-- [ ] `git log` 全履歴に対する secrets scan（gitleaks 等）
-- [ ] `.env` 不在確認 / `.env.example` のみ存在
-- [ ] docs/samples/ 内の JSON に含まれるグローバル IP・ホスト名の扱い判断
+実施日: 2026-07-30（`6b9577e` 時点、41コミット）
+
+```bash
+gitleaks git --redact -v .    # 全履歴
+gitleaks dir --redact -v .    # 作業ツリー（.env の2件だけ出るのが正常）
+```
+
+- [x] `git log` 全履歴に対する secrets scan（gitleaks 8.30.1）
+      - **0件。** 既定ルールは Splunk トークン（22文字）を拾わないため `.gitleaks.toml` に
+        代入・`X-SF-TOKEN` ヘッダの文脈でひっかける2ルールを追加した（陽性テスト済み）
+      - さらに `.env` の**実値そのもの**を全履歴の diff と全コミットのツリーから検索して**0件**
+      - 作業ツリーのスキャンは `.env` の2行だけを検出する = 実トークンが正しい場所にしか無い
+- [x] `.env` 不在確認 / `.env.example` のみ存在
+      - `.env` は未追跡、履歴への登場0回。`.env.example` は `changeme` プレースホルダのみ
+      - 秘密鍵・証明書系（`*.pem` `*.key` `id_rsa` 等）の追跡ファイルなし
+- [x] docs/samples/ 内のグローバル IP・ホスト名の扱い判断 → **そのまま公開して問題なし**
+      - `1.1.1.1`（37箇所）: 測定対象として意図的。Cloudflare の公開リゾルバ
+      - `104.21.24.217`（24箇所）: `8091.info` の Cloudflare エッジ。DNS で誰でも引ける
+      - `192.0.2.1`（7箇所）: RFC 5737 のドキュメント用アドレス。意図的
+      - **traceroute の中間ホップは全て無応答（`{}`）で ISP のトポロジは写っていない**
+      - 残る判断（いずれも秘密ではない。公開するかは好みの問題）:
+        - `192.168.1.1` の hostname が `ntt.setup` → ISP が NTT 系だと分かる
+        - `unpeeled@raspi-testpoint.local` が5ファイル → RasPi の SSH ユーザー名。
+          `.local` は mDNS なので LAN 内でしか解決しない
+      - コミットの author は `goodnight-crypto-dev <dev@mac-mini.local>` で、
+        **個人のメールアドレスは履歴に含まれていない**
 - [ ] README のクイックスタートを第三者再現可能な状態に更新
 - [ ] LICENSE (MIT) 追加
 
