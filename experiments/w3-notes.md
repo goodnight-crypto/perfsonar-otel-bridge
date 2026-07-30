@@ -74,8 +74,90 @@ GbE 実測（929〜940Mbps）から決めてあるため、94Mbps は常時「�
 Lima VM は `docs/lggram-kitting.md`「切替時の注意」のとおり停止せずに残してあるので、
 片道遅延の検証だけを LG Gram で先行させ、throughput は VM 側で継続できる。
 
-#### 未確認（要実測）
+#### 切り分け結果: アダプタ自体が 100M 品で確定
 
-`ethtool` のフル出力で `Supported link modes` を見ていない。**1000baseT が
-サポートに含まれていれば、アダプタは GbE でケーブルかスイッチポート側の問題**という
-可能性が残る。切り分けてから NIC の買い足しを確定させる。
+ケーブルやスイッチポート側のリンクダウングレードではなかった。**GbE 品の買い足しが必要。**
+
+```
+$ lsusb | grep -i realtek
+Bus 001 Device 010: ID 0bda:8152 Realtek Semiconductor Corp. RTL8152 Fast Ethernet Adapter
+
+$ ethtool enx00e04c5cce6d
+	Supported link modes:   10baseT/Half 10baseT/Full
+	                        100baseT/Half 100baseT/Full
+	Link partner advertised link modes:  10baseT/Half 10baseT/Full
+	                                     100baseT/Half 100baseT/Full
+	Speed: 100Mb/s
+	Duplex: Full
+```
+
+`Supported link modes` に 1000baseT が無い。`r8152` ドライバは RTL8152（10/100）と
+RTL8153（10/100/1000）を兼ねるため、ドライバ名だけでは判別できない。**製品名は `lsusb` で見る。**
+
+## Step 2: 実機状態の確認（Step G の着手前）
+
+- 日付: 2026-07-30
+- やったこと: 鍵認証が通るようになったので、Mac から SSH で状態を棚卸しした。
+- 結果 / エラー:
+
+| 項目 | 実測値 | 判定 |
+|---|---|---|
+| `uname -m` | `x86_64` | OK（RasPi / VM は `aarch64`） |
+| OS | Ubuntu 24.04.4 LTS | OK |
+| `stat -fc %T /sys/fs/cgroup/` | `cgroup2fs` | OK |
+| IP | `192.168.1.102/23` | OK（後述） |
+| 蓋・スリープ | `HandleLidSwitch=ignore`、sleep 系4ターゲット全て masked | OK（Step E-2 / E-3 完了） |
+| 時刻同期 | `systemd-timesyncd`（NTPSynchronized=yes）、chrony 未導入 | **要対応** |
+| タイムゾーン | `Etc/UTC` | **要判断**（RasPi / VM と揃えるなら Asia/Tokyo） |
+| Docker | 未導入 | **要対応** |
+| `sudo -n` | パスワード必須 | **ブロッカー**（後述） |
+| RasPi への疎通 | ICMP RTT avg **1.557 ms**（3発、ロス0） | 後述 |
+
+#### ネットマスクが /23 だった
+
+`192.168.1.102/23` すなわち `192.168.0.0/23` で、`192.168.0.x` と `192.168.1.x` が同一セグメント。
+archiver の `_url` が `http://192.168.0.1:8088/archive`（Mac）でありながら
+testpoint 群が `192.168.1.x` にいるのは、これで整合する。**設定ミスではない。**
+
+#### lg-laptop ドライバは有効だった
+
+手順書 Step E-5 で「実機で確認する」としていた点の結論。**ドライバは読み込まれている。**
+
+```
+$ ls /sys/devices/platform/lg-laptop/
+battery_care_limit  fan_mode  fn_lock  leds  reader_mode  usb_charge  ...
+
+$ cat /sys/devices/platform/lg-laptop/battery_care_limit
+80
+```
+
+**既に 80 で、こちらから設定する必要は無かった。** バッテリーは `BAT0` ではなく `CMB0`
+という名前で、現在 97% / `Not charging`。上限 80% に対して 97% あるので、
+放電して 80% で止まるまで充電が入らない状態と読める。手順書の `BAT*` 前提は外れていた。
+
+#### 気になる観測: RasPi への RTT が VM より遅い
+
+| 経路 | ツール | RTT |
+|---|---|---|
+| VM → RasPi（既存ベースライン） | `twping` | **0.944 ms** |
+| LG Gram → RasPi（今回） | ICMP `ping` | **1.557 ms** |
+
+**ツールが違うので直接比較はできない。** ただし +0.6ms は 100Base-TX の
+シリアライゼーション遅延（小パケットで 10µs 未満）では説明が付かない。
+説明候補は **USB ホストコントローラのポーリング遅延**で、これは PROJECT.md が
+W4 候補の時点で挙げていた「USB NIC はジッタで逆効果」という懸念そのものにあたる。
+
+**前節で「100M の影響は片道遅延にほぼ無い」と書いたが、それはリンク速度の話でしかない。
+USB 接続であること自体の上乗せは別問題として残る。** Step G で `twping` を同条件で
+実測して切り分ける。ここで効くのは定常的なオフセットではなく**ジッタ**なので、
+`twping` の two-way jitter と片道遅延の分散を見る。
+
+- 判断・回避策: Step G の実測待ち。GbE NIC が届いたら同じ測定を繰り返して
+  「100M USB / GbE USB / virtio(VM) / RasPi 実 NIC」の4条件を並べる。**記事の材料になる。**
+
+#### ブロッカー: sudo にパスワードが必要
+
+Docker 導入・chrony 導入・タイムゾーン変更が全て `sudo` を要求し、
+Claude Code の SSH（疑似端末なし）からは実行できない。
+RasPi は `sudo -n true` が通る（Raspberry Pi OS の既定）ため、これまで問題にならなかった。
+LG Gram は Ubuntu Server の既定でパスワードを要求する。**ユーザー判断待ち。**
