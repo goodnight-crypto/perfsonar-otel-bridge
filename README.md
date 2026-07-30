@@ -66,11 +66,11 @@ perfSONAR の測定結果を OpenTelemetry メトリクスに変換し、Splunk 
 
 測りたい量が 0.5ms オーダーの片道遅延に対して、これは致命的。RTT / ロス / スループット /
 ホップ数はクロック非依存なので影響を受けない。詳細と確認手順は
-[deploy/vm/README.md](./deploy/vm/README.md)、経緯は w2-notes.md の Step 17。
+[deploy/timesync/README.md](./deploy/timesync/README.md)、経緯は w2-notes.md の Step 17。
 
 **時刻源はディストリ既定を信用しないこと。** Ubuntu 既定の `pool ntp.ubuntu.com` は
 当環境からの実測 RTT が 256.8ms で、root dispersion が 37.7ms まで膨らんでいた。
-近距離の時刻源に差し替える設定を [deploy/vm/](./deploy/vm/) に置いている。
+近距離の時刻源に差し替える設定を [deploy/timesync/](./deploy/timesync/) に置いている。
 
 ## クイックスタート
 
@@ -129,9 +129,9 @@ volume マウントする**ので、コンテナを作り直しても設定が�
 ### 5. VM の時刻源を直す
 
 ```bash
-# deploy/vm/README.md の手順。省略すると片道遅延が常時ゲートで落ちる
+# deploy/timesync/README.md の手順。省略すると片道遅延が常時ゲートで落ちる
 limactl shell perfsonar-vm bash -lc '
-  sudo cp /path/to/repo/deploy/vm/chrony-home-lab.conf /etc/chrony/conf.d/10-home-lab.conf
+  sudo cp /path/to/repo/deploy/timesync/chrony-home-lab.conf /etc/chrony/conf.d/10-home-lab.conf
   sudo cp -n /etc/chrony/chrony.conf /etc/chrony/chrony.conf.orig
   sudo sed -i -E "s@^(pool .*)\$@#\1@" /etc/chrony/chrony.conf
   sudo systemctl restart chrony'

@@ -98,7 +98,7 @@ Zenn 記事投稿コンテスト「OpenTelemetryの知見を、記事にしよ�
         片道遅延の棄却率が 41% → 87% に上昇。Detector は clock 非依存なので影響なし
 - [x] VM の時刻源を修復（Phase D の前提）
       - 原因は **Ubuntu 既定の `pool ntp.ubuntu.com` が RTT 256.8ms** だったこと。
-        国内源（NICT / IIJ mfeed / Cloudflare）へ差し替え。設定は `deploy/vm/` として repo 化
+        国内源（NICT / IIJ mfeed / Cloudflare）へ差し替え。設定は `deploy/timesync/` として repo 化
       - root dispersion 37.7ms → 0.125ms、max-clock-error 21-23ms → **0.19ms**
       - experiments/w2-notes.md Step 14。**ただし Step 16 で訂正あり（下記）**
 - [x] **原因特定: Lima がゲストのクロックを毎分上書きしていた** — experiments/w2-notes.md Step 17
@@ -125,7 +125,7 @@ Zenn 記事投稿コンテスト「OpenTelemetryの知見を、記事にしよ�
       - 日中に限れば VM（RMS offset 20.9µs / poll 16-64s）のほうが
         RasPi（Jitter 2.620ms / poll 34分8秒）より2桁良い。RasPi に chrony を入れて揃える
       - **bare metal 移行後は対称化の相手が LG Gram になる。** 両端に同じ
-        `deploy/vm/chrony-home-lab.conf` を配る形にすると、時刻源の差を変数から外せる
+        `deploy/timesync/chrony-home-lab.conf` を配る形にすると、時刻源の差を変数から外せる
 - [x] 実験: tc netem で遅延 100ms・ロス 3% 注入 → Detector 発火 → 復旧（2026-07-29 21:20〜21:36）
       - RTT 0.93→105ms、ロス 0→2〜6%、スループット 940→241Mbps、WAN RTT 9→115ms
       - Detector は RTT（双方向）・スループット・WAN 異常検知の**3種が発火**

@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "succeeded": true,
+  "packets-lost": 0,
+  "packets-sent": 100,
+  "histogram-ttl": {
+    "255": 100
+  },
+  "max-clock-error": 0.39,
+  "packets-received": 100,
+  "histogram-latency": {
+    "0.18": 1,
+    "0.19": 2,
+    "0.20": 7,
+    "0.21": 11,
+    "0.22": 16,
+    "0.23": 21,
+    "0.24": 8,
+    "0.25": 7,
+    "0.26": 7,
+    "0.27": 3,
+    "0.28": 2,
+    "0.29": 2,
+    "0.30": 2,
+    "0.31": 7,
+    "0.32": 3,
+    "0.36": 1
+  },
+  "packets-reordered": 0,
+  "packets-duplicated": 0
+}

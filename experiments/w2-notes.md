@@ -714,7 +714,7 @@ RasPi は SD カードなので特に効く話。
     > 日中のデータだけを見て「ハードウェアの問題ではなかった」と結論したのが早すぎた。
     > 深夜（00:00〜07:00）は一晩で 270 回・最大 5.79 秒のステップ補正が起きている。
 
-  - 設定は `deploy/vm/chrony-home-lab.conf` として repo 化した（`deploy/vm/README.md` に手順）。
+  - 設定は `deploy/timesync/chrony-home-lab.conf` として repo 化した（`deploy/timesync/README.md` に手順）。
 
 ### それでも片道遅延は測れない — ゲートを通す先で落ちる
 

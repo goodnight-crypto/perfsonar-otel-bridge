@@ -1,11 +1,20 @@
-# Lima VM のホスト側設定
+# 測定ノードの時刻源設定
 
-`deploy/psconfig/` が testpoint コンテナ内の設定を持つのに対し、ここは **VM の OS 側**の設定を持つ。
+`deploy/psconfig/` が testpoint コンテナ内の設定を持つのに対し、ここは**ノードの OS 側**の設定を持つ。
 コンテナのボリュームマウントとは違い自動反映されないので、変更したら下の手順で配り直す。
 
 | ファイル | 役割 |
 |---|---|
-| `chrony-home-lab.conf` | 時刻源の差し替え。`/etc/chrony/conf.d/10-home-lab.conf` に置く |
+| `chrony-home-lab.conf` | 時刻源の差し替え。各ノードの `/etc/chrony/conf.d/10-home-lab.conf` に置く |
+
+**同じファイルを3台すべてに配る。** 片道遅延は両端のクロックの差を測っているので、
+時刻源が揃っていないと「ネットワークの遅延」と「ノード間の相対クロック誤差」を分離できない。
+
+| ノード | OS | 状態 |
+|---|---|---|
+| LG Gram（testpoint #1） | Ubuntu 24.04.4 | 配置済み（2026-07-30） |
+| RasPi（testpoint #2） | Debian 13 trixie | 配置済み（2026-07-30）。それまでは `systemd-timesyncd` がサーバ1台を34分間隔で引いていた |
+| Lima VM | Ubuntu 24.04 | 配置済み（2026-07-29）。**ただし後述のとおり Lima 側がクロックを上書きするため無意味** |
 
 ## なぜ必要か — 片道遅延が測れなくなっていた
 
@@ -42,28 +51,37 @@ RootDelay 2.75ms / RootDispersion 1.02ms / Jitter 1.48ms）。劣化していた
 
 ## 配置
 
+SSH で入れるノード（LG Gram / RasPi）は共通の手順になる。`<host>` を差し替えて実行する。
+
 ```bash
-limactl shell perfsonar-vm bash -lc '
-  sudo cp /Users/dev/src/perfsonar-otel-bridge/deploy/vm/chrony-home-lab.conf \
-          /etc/chrony/conf.d/10-home-lab.conf
+scp deploy/timesync/chrony-home-lab.conf <host>:/tmp/
+ssh <host> '
+  sudo apt-get install -y chrony     # 未導入なら。timesyncd は自動で止まる
+  sudo install -m 644 /tmp/chrony-home-lab.conf /etc/chrony/conf.d/10-home-lab.conf
   # 既定の遠距離プールを無効化する（chrony に unpool 相当の指示は無いためコメントアウト）
   sudo cp -n /etc/chrony/chrony.conf /etc/chrony/chrony.conf.orig
   sudo sed -i -E "s@^(pool .*)\$@#\1@" /etc/chrony/chrony.conf
   sudo systemctl restart chrony'
 ```
 
+Lima VM だけ `ssh` ではなく `limactl shell perfsonar-vm bash -lc '...'` に読み替える。
+
 `/etc/chrony/chrony.conf.orig` に元ファイルが残る。戻すときはこれを書き戻して再起動する。
+
+Ubuntu 24.04 と Debian 13 のどちらも `chrony.conf` に `confdir /etc/chrony/conf.d` があるため、
+この置き方でそのまま読まれる。**収束には約8分かかる。**直後に `chronyc tracking` を見ると
+Skew が 1000000ppm・root dispersion が数秒と出るが、異常ではない。
 
 ## 検証
 
 ```bash
 # 参照元・root dispersion・skew
-limactl shell perfsonar-vm bash -lc 'chronyc tracking; chronyc -n sources'
+ssh <host> 'chronyc tracking; chronyc -n sources'
 
 # 実測の max-clock-error がゲート（10ms）を下回るか
-limactl shell perfsonar-vm docker exec perfsonar-testpoint \
+ssh dev@192.168.1.102 'docker exec perfsonar-testpoint \
   pscheduler task --format json latency --protocol=twamp \
-  --source 192.168.1.104 --dest 192.168.1.101
+  --source 192.168.1.102 --dest 192.168.1.101'
 ```
 
 ## 収束後（差し替えから約8分）

@@ -179,7 +179,7 @@ LG Gram は Ubuntu Server の既定でパスワードを要求する。**ユー�
 再ログインになっていなかった。`ssh -O exit <host>` でマスター接続を切ると反映される。
 **RasPi でも同じ罠を踏む可能性がある。**
 
-### chrony（`deploy/vm/chrony-home-lab.conf` をそのまま流用）
+### chrony（`deploy/timesync/chrony-home-lab.conf` をそのまま流用）
 
 | | 導入直後 | 収束後（約8分） |
 |---|---|---|
@@ -239,7 +239,7 @@ PROJECT.md が W4 候補の時点で書いていた「USB NIC はジッタで逆
 
 - 日付: 2026-07-30
 - やったこと: RasPi の `systemd-timesyncd` を chrony に置き換え、
-  LG Gram / VM と同じ `deploy/vm/chrony-home-lab.conf` を配った。
+  LG Gram / VM と同じ `deploy/timesync/chrony-home-lab.conf` を配った。
 - 結果 / エラー:
 
 ### 移行前（`systemd-timesyncd`）
@@ -272,7 +272,79 @@ Debian の `chrony.conf` は `confdir /etc/chrony/conf.d` を持つため、LG G
 
 ### 設定ファイルの置き場所について（要整理）
 
-`chrony-home-lab.conf` は現在 `deploy/vm/` にあるが、**VM・LG Gram・RasPi の3台に
+`chrony-home-lab.conf` は現在 `deploy/timesync/` にあるが、**VM・LG Gram・RasPi の3台に
 同じものを配っている。** ファイル冒頭のコメントも「Lima VM の時刻源を差し替える」のままで
 実態と合っていない。`deploy/timesync/` 等へ移すのが素直だが、
-`deploy/vm/README.md` は記事の一次情報を多く含むため、移動はユーザー判断を仰ぐ。
+`deploy/timesync/README.md` は記事の一次情報を多く含むため、移動はユーザー判断を仰ぐ。
+
+### 移行後（chrony、収束約8分）
+
+| | RasPi 移行前 (timesyncd) | **RasPi 移行後** | 参考: LG Gram |
+|---|---|---|---|
+| 参照元 | `2.debian.pool.ntp.org` の1台 | **`ntp-b2.nict.go.jp`（stratum 1）** | **同じ `ntp-b2.nict.go.jp`** |
+| ポーリング間隔 | **34分8秒** | **64.2 秒** | 64.2 秒 |
+| RMS offset | —（Jitter 1.544ms） | **111 µs** | 68 µs |
+| Skew | — | **0.789 ppm** | 0.171 ppm |
+| Root dispersion | 2.593 ms（root distance） | **0.405 ms** | 0.409 ms |
+
+**両ノードが同一のサーバを参照する状態になった。** 共通の参照点を持つことで、
+ソース間の食い違いが片道遅延に化ける経路を断てる。
+
+## Step 5: 両端 chrony での片道遅延 — 経路非対称が解像した
+
+- 日付: 2026-07-30
+- やったこと: 両端 chrony の状態で、片道遅延を**両方向**測定した。
+  生 JSON は `docs/samples/latency-twamp-lggram-to-raspi-20260730-161800.json` と
+  `docs/samples/latency-twamp-raspi-to-lggram-20260730-161900.json`。
+- 結果 / エラー:
+
+| 方向 | min | **median** | mean | max | stddev | `max-clock-error` |
+|---|---|---|---|---|---|---|
+| LG Gram → RasPi | 0.180 | **0.230** | 0.241 | 0.360 | **0.036** ms | 0.39 ms |
+| RasPi → LG Gram | 0.680 | **1.150** | 1.181 | 1.600 | **0.210** ms | 0.37 ms |
+
+### 測定の内部整合性が取れた
+
+```
+片道遅延の合計 (mean): 0.241 + 1.181 = 1.423 ms
+実測 twping RTT (mean):                 1.369 ms
+差:                                     0.054 ms
+```
+
+**差 0.054ms は `max-clock-error` 0.39ms の 1/7 で、誤差の範囲に収まっている。**
+別々に測った2方向の片道遅延の和が、独立に測った RTT と一致した。
+**Step 3 で「断定できない」としていた非対称は、実在した。**
+
+### 非対称の正体は USB NIC の受信側
+
+差は **0.940 ms**。向きは **LG Gram が受け取る方向が遅い**。
+
+`max-clock-error` 0.39ms に対して非対称が 0.94ms あり、**約2.4倍。**
+クロック誤差では説明できない大きさなので、経路の性質として読める。
+
+USB NIC の送受信は非対称である。**送信はホスト起点で即座に発行できるが、
+受信はホストコントローラがポーリングするまでカーネルに上がらない。**
+`ethtool -T` が `software-receive` しか出さなかったこととも符合する
+（`software-transmit` が無い = 送信側でカーネルがタイムスタンプを打つ経路が無い）。
+
+RasPi 側は PCIe 直結の GbE なのでこの遅延を持たない。したがって
+**「LG Gram が受信する方向にだけ約0.9ms 乗る」**という観測になる。
+
+### これは記事の山場になる
+
+W2 の時点では「Lima がクロックを壊すので片道遅延は測れない」で終わっていた。
+bare metal 化と両端の時刻源統一を経て、**同じ測定系で「経路の非対称」という
+ネットワークの性質を検出できるところまで来た。**
+
+しかも検出したのは自分で持ち込んだ USB NIC の癖であり、
+**「測定系の限界を測定系自身で可視化した」**という筋になっている。
+片道遅延を RTT の半分で代用してはいけない理由の実例としても使える。
+
+### 残る注意点
+
+- 0.94ms の非対称は **100M NIC での値**。GbE 品に替えたら再測定して差分を見る
+- `max-clock-error` 0.37〜0.39ms は依然として **0.23ms（順方向の中央値）より大きい。**
+  順方向の絶対値は誤差と同オーダーで、まだ精度が足りない。
+  非対称の 0.94ms が誤差より十分大きいので今回の結論は立つ、という関係にある
+- 判断・回避策: GbE NIC 到着後に同じ2方向測定を繰り返す。
+  W3 課題「RasPi の時刻同期を対称にする」は**完了**とする。

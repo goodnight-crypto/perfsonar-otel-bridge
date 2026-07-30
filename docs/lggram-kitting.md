@@ -8,7 +8,7 @@
 
 Lima のホストエージェントがゲストのクロックを約68秒に1回、drift 中央値 123ms で強制上書きしており、
 TWAMP の片道遅延が測定不能になっている。Lima 2.2.0 に無効化する設定は無く、設計意図どおりの動作なので、
-**測定ノードを Lima の外に出す**しかない。経緯は `deploy/vm/README.md`「これで直るのは2つのうち1つだけ」を参照。
+**測定ノードを Lima の外に出す**しかない。経緯は `deploy/timesync/README.md`「これで直るのは2つのうち1つだけ」を参照。
 
 RTT・ロス率・スループット・ホップ数はクロック非依存のため、現在のパイプラインは正しく動いている。
 この入れ替えで取り戻すのは**片道遅延だけ**である。
@@ -61,7 +61,7 @@ LG Gram は RJ45 を内蔵せず、USB Ethernet アダプタを使う。USB NIC 
 
 24.04 を選ぶ理由は2つある。
 
-1. Lima VM と同じ系統なので、`deploy/vm/chrony-home-lab.conf` をそのまま流用できる
+1. Lima VM と同じ系統なので、`deploy/timesync/chrony-home-lab.conf` をそのまま流用できる
 2. LTS であり、短期運用中に予期しない仕様変更を踏まない
 
 **ダウンロードしたファイル名（point release の番号を含む）を控えておく。**
@@ -288,7 +288,7 @@ RasPi と同じく、ルーターの DHCP 予約で固定する。
 | 1-1 | `uname -m` | **`x86_64`**（RasPi と VM は `aarch64`。ここだけ異なる） |
 | 1-2 | `stat -fc %T /sys/fs/cgroup/` | `cgroup2fs` |
 | 1-3 | Docker 導入 | — |
-| — | chrony 導入と `deploy/vm/chrony-home-lab.conf` の配置 | root dispersion 1ms 未満 |
+| — | chrony 導入と `deploy/timesync/chrony-home-lab.conf` の配置 | root dispersion 1ms 未満 |
 | 1-5 | `deploy/raspi/run-testpoint.sh` で testpoint 起動 | — |
 | 1-6 | `pscheduler troubleshoot` | 全項目 OK |
 
