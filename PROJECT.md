@@ -143,15 +143,28 @@ Zenn 記事投稿コンテスト「OpenTelemetryの知見を、記事にしよ�
 執筆を止めてまで移行を追わない。** 移行の期限は 8/5 とし、それまでに片道遅延の
 まともなデータが取れなければ「Lima では測れないことを示した」という結論のまま記事にする。
 
-- [ ] **LG Gram 13Z970 を bare metal の testpoint 化**（手順書: `docs/lggram-kitting.md`）
-      - [ ] Step A-F: Ubuntu Server 24.04 LTS 導入 〜 SSH 到達【ユーザー作業】
-      - [ ] Step G: runbook-w1 Step 1 に合流（Docker / chrony / testpoint / troubleshoot）
+- [x] **LG Gram 13Z970 を bare metal の testpoint 化**（手順書: `docs/lggram-kitting.md`）
+      - [x] Step A-F: Ubuntu Server 24.04.4 LTS 導入 〜 SSH 到達【ユーザー作業】
+      - [x] Step G: runbook-w1 Step 1 に合流（Docker / chrony / testpoint / troubleshoot 全項目 OK）
+      - [x] CLAUDE.md の環境インベントリと「よく使うコマンド」を更新
+      - [x] **切替判定は合格。** 片道遅延が中央値 0.220ms・負値0発・`max-clock-error` 0.32ms
+        （Lima VM では89ビン全てが -11.71〜-11.86ms で全棄却だった）
+      - [x] `ethtool -T` の実測を記録（`PTP Hardware Clock: none`、`software-receive` のみ）
       - [ ] `deploy/psconfig/home-lab-mesh.json` の `addresses.vm` を差し替えて pSConfig 再適用
-      - [ ] CLAUDE.md の環境インベントリと「よく使うコマンド」を更新
-      - [ ] **切替判定**: 片道遅延が RTT（0.95ms）と整合するか。ステップ補正が消えたか。
-        `max-clock-error` の棄却率。判定できたら `limactl stop perfsonar-vm`
-      - [ ] `ethtool -T` の実測を `experiments/w3-notes.md` に記録（USB NIC の精度限界の一次証拠）
-- [ ] RasPi に chrony を導入して両端の時刻源を対称にする（上記 W2 の積み残し）
+            → **GbE NIC 到着待ち（2026-07-30 到着予定）。下記の判断を参照**
+      - [ ] 切替完了後に `limactl stop perfsonar-vm`
+- [x] RasPi に chrony を導入して両端の時刻源を対称にする（上記 W2 の積み残し）
+      - ポーリング 34分8秒 → 64.2秒、root distance 2.593ms → root dispersion 0.405ms
+      - **両ノードが同一の `ntp-b2.nict.go.jp`（stratum 1）を参照する状態にした**
+- [x] **経路非対称の検出**（当初の計画に無かった成果。experiments/w3-notes.md Step 5）
+      - 片道遅延を両方向測ると LG Gram → RasPi が 0.241ms、RasPi → LG Gram が 1.181ms（mean）
+      - **合計 1.423ms が独立に測った twping RTT 1.369ms と一致**（差 0.054ms は
+        `max-clock-error` 0.39ms の 1/7）。測定系の妥当性が担保できた
+      - 非対称 0.940ms は `max-clock-error` の約2.4倍でクロック誤差では説明できない。
+        **USB NIC の受信がホストコントローラのポーリング待ちになる**ことが原因と読める
+      - ただし順方向の中央値 0.230ms は `max-clock-error` 0.39ms より小さい。
+        **絶対値の精度はまだ足りず、結論が立つのは非対称が誤差より十分大きいからである。**
+        この区別は記事にも明記する
 - [ ] AI Assistant に netem 実験の原因調査をさせて記録（上記 W2 の積み残し）
 - [ ] Zenn 記事執筆（構成案は下記）・スクショ整理
 - [ ] リポジトリ public 化（公開前チェックリスト実施）
