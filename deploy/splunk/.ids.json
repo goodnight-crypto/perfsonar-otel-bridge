@@ -3,6 +3,7 @@
     "lan-rtt": "HOWc2edCMAA",
     "packet-loss": "HOWeF7nCIA4",
     "slo-baseline-ratio": "HOgeW0uCMAA",
+    "slo-baseline-ratio-zoom": "HOhzCPUCIAs",
     "throughput": "HOWdHgXCEAE",
     "throughput-retransmits": "HOWedbuCIAQ",
     "trace-hops": "HOWeUmUCEAE",
