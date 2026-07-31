@@ -1,7 +1,7 @@
 {
   "name": "perfSONAR: パケットロスが継続している",
-  "description": "ロス率 1% 超が2データポイント連続したら発火する。実測ベースラインでは LAN は24時間すべて 0、wan-blog だけ 0.1 の単発スパイクが1回あった。単発では発火させないのが要件なので、閾値ではなく min(over) で連続性を要求している",
-  "programText": "loss = data('perfsonar.packet.loss.ratio').mean(by=['path.id', 'ps.source', 'ps.destination'])\n# 5分間隔（slip PT2M で実効 5〜7分）の系列に対し、12分窓の最小値が閾値を超える\n# = 窓内の全データポイントが超えている。\n# lasting() は欠測区間で最後の値を引き延ばすため、疎な測定系列では min(over) のほうが素直。\nsustained = loss.min(over='12m')\n# ただし min(over) だけでは「窓内に1点しか無い」ときにその1点で発火する。\n# 実際、ブリッジ停止でデータが欠測した区間の直前にあった単発スパイク（0.1）で誤検知した。\n# 点数も併せて要求して初めて「2点以上連続」になる。\nenough = loss.count(over='12m')\ndetect(when(sustained > 0.01 and enough >= 2)).publish('packet_loss_sustained')",
+  "description": "ロス率 1% 超が2データポイント連続したら発火する。実測ベースラインでは LAN は24時間すべて 0、wan-blog だけ 0.1 の単発スパイクが1回あった。単発では発火させないのが要件なので、閾値ではなく min(over) で連続性を要求している。集約キーに ps.test.type を含めるのは、同じ経路を測る 20発の rtt タスクと 100発の latency タスクを1系列に潰さないため（experiments/w3-notes.md Step 11）",
+  "programText": "# 集約キーに ps.test.type が要る。同じ path.id / source / destination を\n# lan-rtt-task（rtt / 20発）と lan-owd-task（latency / 100発）の2つが測っており、\n# test.type を落とすと **2つのタスクが1系列に平均されてしまう**。\n# 20発側は 3% ロスでも 54% の確率で 0 を返すので、平均するとロス率が半減し、\n# min(over) が 0 に落ちて発火しない。2026-07-29 の注入実験で実際にこれが起きた\n# （当時は「サンプルサイズの問題」と誤診した。experiments/w3-notes.md Step 11）。\nloss = data('perfsonar.packet.loss.ratio').mean(by=['path.id', 'ps.source', 'ps.destination', 'ps.test.type'])\n# 5分間隔（slip PT2M で実効 5〜7分）の系列に対し、12分窓の最小値が閾値を超える\n# = 窓内の全データポイントが超えている。\n# lasting() は欠測区間で最後の値を引き延ばすため、疎な測定系列では min(over) のほうが素直。\nsustained = loss.min(over='12m')\n# ただし min(over) だけでは「窓内に1点しか無い」ときにその1点で発火する。\n# 実際、ブリッジ停止でデータが欠測した区間の直前にあった単発スパイク（0.1）で誤検知した。\n# 点数も併せて要求して初めて「2点以上連続」になる。\n# WAN 公開ホスト（PT15M）はこの条件を構造的に満たせない。実測で count は常に 1 だった。\nenough = loss.count(over='12m')\ndetect(when(sustained > 0.01 and enough >= 2)).publish('packet_loss_sustained')",
   "maxDelay": null,
   "tags": ["perfsonar", "as-code"],
   "rules": [
