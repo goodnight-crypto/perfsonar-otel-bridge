@@ -9,6 +9,7 @@
     "defaultPlotType": "LineChart",
     "showEventLines": false,
     "stacked": false,
+    "onChartLegendOptions": { "showLegend": true, "dimensionInLegend": "sf_streamLabel" },
     "time": { "type": "relative", "range": 86400000, "rangeEnd": 0 },
     "axes": [
       {
@@ -35,7 +36,7 @@
       { "label": "delay", "displayName": "往路 OWD median（15分平滑）", "plotType": "LineChart", "valueUnit": "Millisecond", "yAxis": 0 },
       { "label": "rtt", "displayName": "twping RTT mean（15分平滑）", "plotType": "LineChart", "valueUnit": "Millisecond", "yAxis": 0 },
       { "label": "reverse", "displayName": "復路 推定 = RTT − OWD", "plotType": "LineChart", "valueUnit": "Millisecond", "yAxis": 0 },
-      { "label": "clock_error", "displayName": "max-clock-error（右軸・生値）", "plotType": "ColumnChart", "valueUnit": "Millisecond", "yAxis": 1 }
+      { "label": "clock_error", "displayName": "max-clock-error（右軸・生値）", "plotType": "LineChart", "valueUnit": "Millisecond", "yAxis": 1 }
     ]
   }
 }

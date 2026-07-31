@@ -9,6 +9,7 @@
     "defaultPlotType": "LineChart",
     "showEventLines": false,
     "stacked": false,
+    "onChartLegendOptions": { "showLegend": true, "dimensionInLegend": "ps.source" },
     "time": { "type": "relative", "range": 86400000, "rangeEnd": 0 },
     "axes": [
       {

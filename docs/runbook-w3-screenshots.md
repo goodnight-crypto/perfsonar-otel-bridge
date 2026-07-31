@@ -23,33 +23,56 @@
 - [ ] 保存先: `docs/article/images/raw/`、命名は `ss-<連番>-<チャート略称>-<内容>.png`
       例: `ss-01-slo-injection.png`
 
-### チャート単体は View fullscreen で撮る（ブラウザは Safari）
+### 撮り方（2026-08-01 のリハーサル 3 巡で確定。ブラウザは Safari）
 
-**チャート右上の3点リーダー → `View fullscreen`。** ブラウザは Safari を使う。
+**OS のスクリーンショットではなく、Splunk の書き出し機能を使う。**
+ブラウザ枠も Splunk のアカウント表示名も一切写らない。
 
-これで 3 つ同時に片付く。
+| ショット | 手順 |
+|---|---|
+| チャート単体<br>（SS-01・01b・02・03・04・08） | チャート右上の 3 点リーダー → **`Download chart as image`** |
+| ダッシュボード全景<br>（SS-06・SS-09） | ダッシュボード右上の 3 点リーダー → **`Export`** → ファイルフォーマットに **image** を指定 |
+| AI Assistant（SS-07） | ダッシュボードを `View fullscreen` にして右ペインに開き、`Cmd+Shift+4` |
+| Alerts（SS-05） | **fullscreen が無い。** `Cmd+Shift+4` でウィンドウ単位に撮る |
 
-1. **ブラウザ枠と Splunk のアカウント表示名が写らない。** 記事に載せる前提だとこれが一番効く。
-   Phase 3 の検証ショット（`docs/article/images/verify/ph3-overlay-01.png`）には
-   アカウント名が写っており、公開前のマスクが必要になっていた
-2. **チャートが画面いっぱいに広がるので凡例が出る。** ダッシュボード上の `h1`（1 行）配置では
-   凡例が出ず、Step 5 の「凡例が読める」を満たせない
-3. **軸ラベルが省略されない**（`RTT / 24h中央値 (...` のような切れ方をしなくなる）
+**書き出した画像は必ず軸を目視で確認する。** 落とし穴が 2 つある。
 
-**fullscreen は チャート単体だけでなく ダッシュボード全景でも使える。**
-2026-07-31 に実機で確認した範囲は次のとおり。
+- **チャート単体の Download は絶対レンジを保持する**（実測で確認済み）
+- **ダッシュボードの Export は絶対レンジを落とすことがある。** リハーサルでは
+  14:00〜16:00 を指定したのに 24 時間表示で書き出された。Export の前に
+  Absolute を入れ直し、**書き出した画像の時刻軸を見て確かめる**
 
-| ショット | fullscreen | 備考 |
+保存後は**ファイル名も確認する。** リハーサルでは 9 件に先頭スペースが、
+1 件に `.png.png` の二重拡張子が混入していた。
+
+### 凡例はチャート定義側で出す（as-code）
+
+**`Download chart as image` には Splunk 標準の凡例パネルが含まれない。** 5 系列ある
+WAN RTT や、`delay` / `rtt` / `clock_error` が重なる Chart 6 は、これでは読めなかった。
+
+`options.onChartLegendOptions` で**チャート内に凡例を描かせる**ことで解決してある。
+
+```json
+"onChartLegendOptions": { "showLegend": true, "dimensionInLegend": "path.id" }
+```
+
+`dimensionInLegend` は必須で、省略すると
+`Default dimension to show on chart legend missing.` で 400 になる。
+**表示できる次元は 1 つだけ**なので、チャートごとに主役の次元を選んである。
+
+| チャート | 凡例に出す次元 | 備考 |
 |---|---|---|
-| SS-01・SS-01b・SS-02・SS-03・SS-04・SS-08（チャート単体） | 使える | チャート右上の 3 点リーダー |
-| SS-06・SS-09（ダッシュボード全景） | 使える | `ph3-overlay-02/03.png` が実例 |
-| SS-07（AI Assistant） | **使える** | fullscreen のまま右ペインに開く。`Use current page filters` が ON なので、表示中のレンジをそのまま見てくれる（`ph3-overlay-04.png`） |
-| SS-05（Alerts 一覧・詳細） | 未確認 | ダッシュボードではないので、使えなければ `Cmd+Shift+4` → スペース → ウィンドウ単位で撮る |
+| SLOビュー / ズーム / WAN RTT / パケットロス / ホップ数 | `path.id` | |
+| Chart 6 / WAN 片道遅延 | `sf_streamLabel` | `delay` / `rtt` / `reverse` / `clock_error` |
+| LAN RTT | `sf_streamLabel` | `mean` / `max` |
+| スループット / TCP 再送 | `ps.source` | |
 
-つまり **Alerts 画面以外はブラウザ枠もアカウント名も写らずに撮れる。**
-Alerts だけは撮影後に確認し、写り込みがあれば Phase 5 でマスクする。
+**同じラベルが 2 つ並ぶのは正常である。** Chart 6 は往復 2 方向、WAN 片道遅延は
+宛先 2 拠点あり、`sf_streamLabel` はそこを区別しない。色で分かれるので、
+キャプションで「同じラベルが 2 本なのは 2 方向 / 2 拠点」と補う。
 
-時刻レンジは fullscreen に入っても維持される。Absolute の指定は先に済ませておく。
+**凡例が横に収まらないと末尾が `See all` に畳まれる。** SLO ビューを w6 で置いていた
+ときは 6 系列のうち 5 つしか出ず、`wan-sinet-tokyo` が隠れた。**w12 h2 に変更済み**。
 
 ## Step 1: イベントオーバーレイの準備【Claude Code】
 
@@ -264,7 +287,8 @@ URL に書かなくても 4 本とも表示される。記録には
 | SS-02 | ゲートの物語・続編 | `charts/twamp-delay-gated.json` | 絶対: 注入±30min | 注入中に **OWD が欠測**する一方 **RTT は連続**して劣化を描く / ceiling 5ms の watermark | 6章 |
 | SS-03 | 注入の生値詳細 | `charts/lan-rtt.json` + `charts/wan-rtt.json`（2枚 or 並置） | 絶対: 注入±30min | 0.9→105ms / 9→115ms の段差 | 6章 |
 | SS-04 | スループット/ロス | `charts/throughput.json` + `charts/packet-loss.json` | 絶対: 注入±30min | 940→241Mbps の谷 / ロス系列の断続性 | 6章 |
-| SS-05 | Detector 発火 | Alerts 一覧 + アラート詳細 1 件 | 発火中にライブ撮影 | 発火時刻・トリガー値・severity | 5-6章 |
+| SS-05a | Detector 発火（一覧） | Alerts の Active alerts | **発火中にライブ撮影（撮り逃し不可）** | severity のカウントと Rule name の行 | 5-6章 |
+| SS-05b | Detector 発火（詳細） | アラート詳細 1 件 | 事後で可 | 検知時刻 JST・閾値・Alert ID・Data links | 5-6章 |
 | SS-06 | 発火中のダッシュボード全景 | ダッシュボード全体 | 発火中にライブ撮影（相対 1h） | 複数チャートが同時に崩れている全景 + イベントマーカー | 6章 |
 | SS-07 | AI Assistant 調査 | AI Assistant 会話画面 | 発火中〜直後 | 質問文と回答全文（複数スクロールなら分割撮影） | 6章 |
 | SS-08 | 経路非対称（平常時） | `charts/wan-owd.json` | 絶対: 平常な直近 24h | 往路/復路/RTT の 3 系列が乖離して見える | 5章 or 7章 |
@@ -287,6 +311,25 @@ Phase 3 の検証ショットで、**watermark 1.0 と 1.5 が軸の底で重な
 1. `slo-baseline-ratio` を fullscreen にして SS-01 を撮る（Y 軸自動。LAN の急騰が主役）
 2. 戻って `slo-baseline-ratio-zoom` を fullscreen にし、**同一の絶対レンジ**で SS-01b を撮る
 3. LAN が上に振り切れるのは想定どおり。実値は SS-01 側で読ませる
+
+### SS-05 は一覧が最優先（撮り逃すと再注入しかない）
+
+リハーサルで **Active alerts は継続中のインシデントしか出さない**と分かった。
+`check-alerts.sh` が発火 15 件を返す状態でも、画面は `No data found` で
+全 severity が 0 だった。**解消した瞬間に一覧から消える。**
+
+- **SS-05a（一覧）は発火中にしか撮れない。** 注入中の最優先ショットにする
+- **SS-05b（詳細）は事後で撮れる。** Resolved なアラートでも、検知時刻・閾値・
+  Alert ID・Data links が揃った画面が開く（リハーサルで 7/29 のアラートを撮れた）
+- 撮影前に **「Get the most out of alerts」バナーを × で閉じる**
+
+### AI Assistant は失敗しうる（SS-07）
+
+リハーサルでは `I couldn't complete metric discovery right now. Please retry again later.`
+で落ちた。SignalFlow: Finalizing まで進んでから失敗している。
+
+**注入直後（T+2 目安）に 1 回投げて疎通を確かめる。** 失敗したら T+10 の本番投入までに
+リトライしておく。16 分の窓で 1 回しか試さないと撮り逃す。
 
 ### SS-05 のナラティブ分岐（Phase 1-6 の調査結果を反映）
 

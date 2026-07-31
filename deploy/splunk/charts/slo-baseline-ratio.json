@@ -9,13 +9,12 @@
     "defaultPlotType": "LineChart",
     "showEventLines": true,
     "stacked": false,
+    "onChartLegendOptions": { "showLegend": true, "dimensionInLegend": "path.id" },
     "time": { "type": "relative", "range": 86400000, "rangeEnd": 0 },
     "axes": [
       {
         "label": "RTT / 24h中央値 (倍率)",
         "min": 0,
-        "highWatermark": 1.5,
-        "highWatermarkLabel": "+50%",
         "lowWatermark": 1.0,
         "lowWatermarkLabel": "ベースライン (1.0)"
       },

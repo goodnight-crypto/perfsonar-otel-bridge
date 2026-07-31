@@ -1200,6 +1200,76 @@ Phase 3 の検証で使った URL はこの形だった。
 あわせて運用ルールを 1 つ足した。**撮影が完全に終わるまで
 `apply.sh --only dashboard` を流さない。** 流すと開いていたタブの URL まで再現しなくなる。
 
+## Step 14: 撮影リハーサルを 3 巡した。凡例が as-code の問題だと分かった
+
+- 日付: 2026-07-31〜08-01
+- 注入前に撮影手順を通しで試した。**結果として 5 つの問題を潰し、撮り方が確定した。**
+  注入は未実施。
+
+### 撮り方は OS スクショではなく Splunk の書き出し
+
+ユーザーが見つけた。**チャートは 3 点リーダー → `Download chart as image`、
+ダッシュボードは 3 点リーダー → `Export` → フォーマット image。**
+ブラウザ枠もアカウント表示名も一切写らない。OS の `Cmd+Shift+4` より素直で、
+これを標準にした。Alerts 画面だけは書き出しが無いので OS スクショになる。
+
+### 最大の問題は「書き出し画像に凡例が入らない」
+
+`Download chart as image` は **Splunk 標準の凡例パネルを含まない。**
+5 系列ある WAN RTT は色違いの線が並ぶだけ、Chart 6 は `delay` / `rtt` / `clock_error` が
+区別できない。Step 5 の「凡例が読める」を満たせず、**SS-02 の物語が成立しなかった。**
+
+`options.onChartLegendOptions` で**チャート内に凡例を描かせる**ことで解決した。
+
+```json
+"onChartLegendOptions": { "showLegend": true, "dimensionInLegend": "path.id" }
+```
+
+`dimensionInLegend` は必須で、`null` を渡すと
+`Default dimension to show on chart legend missing.` の 400 になる。値は自由文字列で、
+`sf_streamLabel` や `sf_originatingMetric` のようなメタデータ系も通る。
+**1 つしか出せない**ので、チャートごとに主役の次元を選んだ。
+
+`sf_streamLabel` が当たりだった。`delay` / `rtt` / `reverse` / `clock_error` や
+`mean` / `max` のように短く、publish ラベルそのものが出る。
+`sf_originatingMetric` は `perfsonar.rtt.max` のように長く、凡例の幅を食って
+末尾が `See all` に畳まれてしまう。
+
+### 3 巡で潰した問題
+
+| # | 症状 | 対処 |
+|---|---|---|
+| 1 | 書き出し画像に凡例が無い | `onChartLegendOptions` を 10 チャートに追加 |
+| 2 | SLO ビューの凡例が 6 系列中 5 つで `See all` に畳まれ、`wan-sinet-tokyo` が隠れた | タイルを w6 → **w12** に |
+| 3 | `+50%` と `ベースライン (1.0)` のラベルが重なって両方読めない | 全景側の watermark を **1.0 のみ**に。`+50%` はズーム版が担当 |
+| 4 | `clock_error` の棒グラフが画面を埋め、`delay` / `rtt` / `reverse` の線を覆い隠す | **ColumnChart → LineChart**（Chart 6 と WAN 片道遅延） |
+| 5 | 書き出しが横長すぎてキービジュアルが薄い（3010×412） | SLO 2 枚を **h1 → h2** に（3010×852） |
+
+問題 3 は**平常時と注入時の両方で起きる。** 平常時は Y 軸上限が 1.1 前後なので 1.5 の
+watermark が軸外に出てラベルだけ上端に残り、注入時は 117 倍まで伸びて両方が底に潰れる。
+**全景とズームで役割を分けるのが正解だった。**
+
+### 撮影運用で分かったこと
+
+- **チャート単体の Download は絶対レンジを保持する。** ダッシュボードの Export は
+  落とすことがあり、14:00〜16:00 を指定したのに 24 時間で書き出された。
+  **書き出した画像の時刻軸を毎回見る**
+- **Active alerts は継続中のインシデントしか出さない。** 発火 15 件の状態でも
+  画面は `No data found` だった。**SS-05a（一覧）は発火中にしか撮れない**ので
+  注入中の最優先ショットにする。SS-05b（詳細）は Resolved でも撮れる
+- **AI Assistant は落ちることがある。** `I couldn't complete metric discovery right now.`
+  で失敗した。注入直後に 1 回投げて疎通を確かめてから本番の質問をする
+- ダウンロード時のリネームで**先頭スペースと `.png.png` が混入した**（9 件 + 1 件）。
+  保存後にファイル名も確認する
+
+### 残る既知の弱点（許容する）
+
+WAN 片道遅延チャートは `colorBy: Dimension` なので、**色は宛先（SINET / 理研）を表し、
+同じ色の中で `delay` / `reverse` / `rtt` が区別できない。** ただし 3 本は
+`rtt` > `reverse` > `delay` の順に明確な帯として分離するので、キャプションで
+「上から rtt / reverse / delay」と補えば読める。`colorBy` を変えると今度は
+2 拠点が区別できなくなるため、このままにする。
+
 ## Step 13: ロス Detector の集約キーを直した。ただし 12 分窓の制約は残る
 
 - 日付: 2026-07-31

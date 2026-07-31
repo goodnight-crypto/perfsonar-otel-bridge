@@ -9,6 +9,7 @@
     "defaultPlotType": "LineChart",
     "showEventLines": false,
     "stacked": false,
+    "onChartLegendOptions": { "showLegend": true, "dimensionInLegend": "sf_streamLabel" },
     "time": { "type": "relative", "range": 86400000, "rangeEnd": 0 },
     "axes": [
       {
@@ -34,7 +35,7 @@
     "publishLabelOptions": [
       { "label": "delay", "displayName": "片道遅延 median（ゲート通過分のみ）", "plotType": "LineChart", "valueUnit": "Millisecond", "yAxis": 0 },
       { "label": "rtt", "displayName": "同経路の RTT mean（ゲート無し・比較用）", "plotType": "LineChart", "valueUnit": "Millisecond", "yAxis": 0 },
-      { "label": "clock_error", "displayName": "max-clock-error（右軸）", "plotType": "ColumnChart", "valueUnit": "Millisecond", "yAxis": 1 }
+      { "label": "clock_error", "displayName": "max-clock-error（右軸）", "plotType": "LineChart", "valueUnit": "Millisecond", "yAxis": 1 }
     ]
   }
 }
