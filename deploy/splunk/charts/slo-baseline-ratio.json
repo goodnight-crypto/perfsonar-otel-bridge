@@ -1,0 +1,33 @@
+{
+  "name": "SLOビュー — 全パスRTT / 直近24hベースライン比",
+  "description": "LAN 1ms と WAN 9ms を生値で重ねるとスケールが崩壊するため、各パスを自身の直近24h中央値で正規化して重ねる。平常時は全パスが 1.0 に張り付き、逸脱だけが浮く = 『パスをサービスとみなして SLO を張る』の視覚化。対象は path.id を持つ6系列（lan-wired + wan-* 5本）で、path.id 未設定の手動タスク由来は filter('path.id', '*') で除外している。注意1: ローリングベースラインは長時間の異常を徐々に取り込むため、恒常監視の一次判定は Detector 側（絶対閾値 / against_recent）が担い、このチャートは俯瞰用。注意2: v2 chart API に対数軸のフィールドが無い（axes は min/max/label/watermark のみ）ため線形軸。LAN が100倍級に跳ねる区間ではベースライン帯が潰れるので、その場合は Y軸 max を切ったズーム版を併せて見る（docs/runbook-w3-screenshots.md SS-01b）",
+  "programText": "rtt = data('perfsonar.rtt.mean', filter=filter('path.id', '*')).mean(by=['path.id'])\nbase = rtt.median(over='24h')\nratio = (rtt / base).publish(label='ratio')",
+  "options": {
+    "type": "TimeSeriesChart",
+    "unitPrefix": "Metric",
+    "colorBy": "Dimension",
+    "defaultPlotType": "LineChart",
+    "showEventLines": true,
+    "stacked": false,
+    "time": { "type": "relative", "range": 86400000, "rangeEnd": 0 },
+    "axes": [
+      {
+        "label": "RTT / 24h中央値 (倍率)",
+        "min": 0,
+        "highWatermark": 1.5,
+        "highWatermarkLabel": "+50%",
+        "lowWatermark": 1.0,
+        "lowWatermarkLabel": "ベースライン (1.0)"
+      },
+      { "label": "" }
+    ],
+    "legendOptions": {
+      "fields": [
+        { "property": "path.id", "enabled": true }
+      ]
+    },
+    "publishLabelOptions": [
+      { "label": "ratio", "displayName": "RTT / 24hベースライン比", "plotType": "LineChart", "valueSuffix": "x", "yAxis": 0 }
+    ]
+  }
+}

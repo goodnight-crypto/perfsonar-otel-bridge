@@ -2,6 +2,7 @@
   "chart": {
     "lan-rtt": "HOWc2edCMAA",
     "packet-loss": "HOWeF7nCIA4",
+    "slo-baseline-ratio": "HOgeW0uCMAA",
     "throughput": "HOWdHgXCEAE",
     "throughput-retransmits": "HOWedbuCIAQ",
     "trace-hops": "HOWeUmUCEAE",

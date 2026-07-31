@@ -2,13 +2,14 @@
   "name": "perfSONAR home lab — network SLO",
   "description": "perfSONAR → ブリッジ → OTel Collector → Splunk O11y のパイプラインで観測している自宅ラボの定点観測。測定定義の正は deploy/psconfig/home-lab-mesh.json、変換仕様は docs/schema.md",
   "layout": [
-    { "chart": "lan-rtt", "row": 0, "column": 0, "width": 6, "height": 1 },
-    { "chart": "wan-rtt", "row": 0, "column": 6, "width": 6, "height": 1 },
-    { "chart": "twamp-delay-gated", "row": 1, "column": 0, "width": 12, "height": 2 },
-    { "chart": "wan-owd", "row": 3, "column": 0, "width": 12, "height": 2 },
-    { "chart": "packet-loss", "row": 5, "column": 0, "width": 6, "height": 1 },
-    { "chart": "throughput", "row": 5, "column": 6, "width": 6, "height": 1 },
-    { "chart": "throughput-retransmits", "row": 6, "column": 0, "width": 6, "height": 1 },
-    { "chart": "trace-hops", "row": 6, "column": 6, "width": 6, "height": 1 }
+    { "chart": "slo-baseline-ratio", "row": 0, "column": 0, "width": 12, "height": 1 },
+    { "chart": "lan-rtt", "row": 1, "column": 0, "width": 6, "height": 1 },
+    { "chart": "wan-rtt", "row": 1, "column": 6, "width": 6, "height": 1 },
+    { "chart": "twamp-delay-gated", "row": 2, "column": 0, "width": 12, "height": 2 },
+    { "chart": "wan-owd", "row": 4, "column": 0, "width": 12, "height": 2 },
+    { "chart": "packet-loss", "row": 6, "column": 0, "width": 6, "height": 1 },
+    { "chart": "throughput", "row": 6, "column": 6, "width": 6, "height": 1 },
+    { "chart": "throughput-retransmits", "row": 7, "column": 0, "width": 6, "height": 1 },
+    { "chart": "trace-hops", "row": 7, "column": 6, "width": 6, "height": 1 }
   ]
 }
