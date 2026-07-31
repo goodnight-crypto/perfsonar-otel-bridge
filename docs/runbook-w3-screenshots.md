@@ -36,11 +36,18 @@
    凡例が出ず、Step 5 の「凡例が読める」を満たせない
 3. **軸ラベルが省略されない**（`RTT / 24h中央値 (...` のような切れ方をしなくなる）
 
-**単体ショット（SS-01・SS-01b・SS-02・SS-03・SS-04・SS-08）は全部この撮り方で揃える。**
-ダッシュボード全景（SS-06・SS-09）と Alerts 画面（SS-05）、AI Assistant（SS-07）は
-fullscreen が使えないので、**ウィンドウ単位で撮ってブラウザ枠を含めない**
-（`Cmd+Shift+4` → スペース → ウィンドウをクリック）。それでもアカウント名が写る場合は
-Phase 5 でマスクする。
+**fullscreen は チャート単体だけでなく ダッシュボード全景でも使える。**
+2026-07-31 に実機で確認した範囲は次のとおり。
+
+| ショット | fullscreen | 備考 |
+|---|---|---|
+| SS-01・SS-01b・SS-02・SS-03・SS-04・SS-08（チャート単体） | 使える | チャート右上の 3 点リーダー |
+| SS-06・SS-09（ダッシュボード全景） | 使える | `ph3-overlay-02/03.png` が実例 |
+| SS-07（AI Assistant） | **使える** | fullscreen のまま右ペインに開く。`Use current page filters` が ON なので、表示中のレンジをそのまま見てくれる（`ph3-overlay-04.png`） |
+| SS-05（Alerts 一覧・詳細） | 未確認 | ダッシュボードではないので、使えなければ `Cmd+Shift+4` → スペース → ウィンドウ単位で撮る |
+
+つまり **Alerts 画面以外はブラウザ枠もアカウント名も写らずに撮れる。**
+Alerts だけは撮影後に確認し、写り込みがあれば Phase 5 でマスクする。
 
 時刻レンジは fullscreen に入っても維持される。Absolute の指定は先に済ませておく。
 
@@ -219,6 +226,34 @@ ssh dev@192.168.1.102 'chronyc tracking | grep -E "System time|Frequency|Skew|La
 3. チャート単体を撮る場合はチャートをクリックして拡大ビューにし、同様に Absolute 指定
 4. URL に時刻がクエリとして入るので、**撮影に使った URL を w3-notes.md に貼っておく**
    （撮り直し・レンジ再現が一発でできる）
+
+### URL の形式と、記録するときに落とすもの
+
+実物はこの形になる（Phase 3 の検証で使ったもの）。
+
+```
+https://app.jp0.signalfx.com/#/dashboard/HOWdHgXCEAI
+  ?groupId=HOWc2kfCIAA&configId=HOWdHgfCMAA
+  &startTimeUTC=1785327600000&endTimeUTC=1785331200000
+  &selectedEventOverlays=nfendE&selectedEventOverlays=Vt74qr
+  &selectedEventOverlays=86r5Xr&selectedEventOverlays=F0fPyN
+```
+
+時刻のパラメータは `startTime` / `endTime` ではなく **`startTimeUTC` / `endTimeUTC`**
+（エポックミリ秒）である。
+
+**`selectedEventOverlays` は記録用 URL から落とす。** ここに入る `overlayId` は
+**ダッシュボードを PUT するたびにサーバが振り直す。** 上の 4 個は
+ズームチャートを追加した時点で無効になり、`EwrMfn` / `4WHJzp` / `lPXi59` / `VVAHJr` に
+変わった。**`overlayId` を含む URL は再現性が無い。**
+
+落としても困らない。`apply.sh` が `selectedEventOverlays` を**全件 ON で生成する**ので、
+URL に書かなくても 4 本とも表示される。記録には
+`?groupId=...&configId=...&startTimeUTC=...&endTimeUTC=...` だけを残す。
+
+> **撮影が完全に終わるまで `apply.sh --only dashboard` を流さない。**
+> 流すと `overlayId` が変わり、撮影中に開いていたタブの URL も再現しなくなる。
+> チャート定義の変更が必要になった場合は `--only charts` で止める。
 
 ## Step 4: ショットリスト（記事構成案の章に対応）
 

@@ -1158,13 +1158,47 @@ ratio では平坦な線に見えてしまう。
 副作用として、平常時のダッシュボードも「全景 + ベースライン帯のズーム」の 2 枚組になった。
 SLO ダッシュボードとしてはむしろ素直な形なので、そのまま SS-09 にも写す。
 
-### 公開前チェックの追加項目
+### fullscreen はダッシュボード全景でも AI Assistant でも使える
 
-`ph3-overlay-01.png` にはブラウザのタブと Splunk の**アカウント表示名が写っている。**
-以後の単体ショットは fullscreen で撮るので写り込まないが、**ダッシュボード全景
-（SS-06 / SS-09）と Alerts 画面（SS-05）、AI Assistant（SS-07）は fullscreen が使えない。**
-ウィンドウ単位で撮ってブラウザ枠を外し、それでも残るものは Phase 5 でマスクする。
-PROJECT.md の公開チェックリストに関わる項目である。
+検証ショット 4 枚の内訳が判明した。
+
+| ファイル | 撮り方 |
+|---|---|
+| `ph3-overlay-01.png` | 非 fullscreen。ブラウザ枠とアカウント表示名が写っている |
+| `ph3-overlay-02.png` / `ph3-overlay-03.png` | **ダッシュボード全景の fullscreen** |
+| `ph3-overlay-04.png` | fullscreen のまま **AI Assistant を開いた状態** |
+
+**AI Assistant は fullscreen で使える。** しかも `Use current page filters` が ON なので、
+表示中の絶対レンジをそのまま見てくれる。**SS-07 は「AI に何を見せたか」が
+同じ画面に写る**形で撮れることになり、W3 の積み残し回収として都合が良い。
+
+つまり写り込みを気にする必要があるのは **Alerts 画面（SS-05）だけ**である。
+ダッシュボードではないので fullscreen があるか未確認。撮影後に確認し、
+写り込みがあれば Phase 5 でマスクする。PROJECT.md の公開チェックリストに関わる。
+
+### 撮影 URL に `overlayId` を残してはいけない
+
+Phase 3 の検証で使った URL はこの形だった。
+
+```
+.../dashboard/HOWdHgXCEAI?groupId=...&configId=...
+  &startTimeUTC=1785327600000&endTimeUTC=1785331200000
+  &selectedEventOverlays=nfendE&selectedEventOverlays=Vt74qr
+  &selectedEventOverlays=86r5Xr&selectedEventOverlays=F0fPyN
+```
+
+時刻は `startTime` / `endTime` ではなく **`startTimeUTC` / `endTimeUTC`**。
+
+問題は `selectedEventOverlays` のほうで、**`overlayId` はダッシュボードを PUT するたびに
+サーバが振り直す。** 上の 4 個は、直後にズームチャートを追加した時点で無効になり、
+`EwrMfn` / `4WHJzp` / `lPXi59` / `VVAHJr` に変わっていた。使い捨てダッシュボードで
+スキーマを調べたときにも、POST で `Knxgt5` だった値が PUT 後に `JhkG9o` へ変わっている。
+
+**撮影 URL には時刻レンジだけを残す。** `apply.sh` が `selectedEventOverlays` を
+全件 ON で生成するので、URL に書かなくてもマーカーは出る。
+
+あわせて運用ルールを 1 つ足した。**撮影が完全に終わるまで
+`apply.sh --only dashboard` を流さない。** 流すと開いていたタブの URL まで再現しなくなる。
 
 ## Step 13: ロス Detector の集約キーを直した。ただし 12 分窓の制約は残る
 
