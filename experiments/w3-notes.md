@@ -1046,3 +1046,76 @@ SignalFlow の `over` 集計は窓が埋まる前から値を出す。WAN 公開
 
 ただし 7/31 22:52 を過ぎるまでベースラインは 24h 未満のデータで動くので、
 **キービジュアルの撮影はその時刻以降**という条件は維持する。
+
+## Step 12: 再注入の準備 — LG Gram 用の注入手順とイベントオーバーレイ
+
+- 日付: 2026-07-31
+- 撮影セッション（`docs/runbook-w3-screenshots.md`）の準備を Phase 2・3 まで進めた。
+  **注入はまだ実施していない。** 実施はユーザーの合図を待つ（CLAUDE.md 規約 2）。
+
+### 注入対象の前提を実機で取り直した
+
+| 項目 | 結果 |
+|---|---|
+| デフォルトルート | `default via 192.168.1.1 dev enxa0cec8fe0854`。**LAN も WAN も同一 NIC** |
+| 現在の qdisc | `fq_codel`（root）。netem は root に入るので**注入中は fq_codel が外れる** |
+| `sudo -n` | NOPASSWD で通る |
+| `sch_netem` | あり（6.8.0-136-generic） |
+| `systemd-run` | `/usr/bin/systemd-run` |
+| chrony | System time 59µs fast、Skew 0.067ppm。注入前の基準として記録 |
+| retry-policy | 展開後の **12 タスク全ての `archives` に入っている**（欠落 0） |
+
+同一 NIC なので、**egress に入れれば LAN 3 本と WAN 全パスが同時に崩れる。**
+1 枚のキービジュアルで全パス劣化が撮れるという Phase 4 の前提が成り立つ。
+
+### `psconfig pscheduler-tasks` は展開後の完全な spec を出す
+
+計画では「タスク名の一覧しか出さないので retry-policy の確認には使えない」と見込んでいたが、
+**実際は archives を含む完全な JSON を出す。** ホスト側ファイルの grep より強い確認手段になる。
+マウントされたファイルではなく、**pScheduler が実際に受け取る形**を見られるためである。
+
+### デッドマンスイッチは systemd に委譲する
+
+7/29 は `limactl shell` のローカル実行だったが、今回は **SSH 自体が注入対象 NIC を通る。**
+解除コマンドが届かない事態への保険が要る。
+
+`ssh host 'cmd &'` + `nohup` は使わない。stdin をリダイレクトしないと、
+**バックグラウンドの子プロセスが exec チャネルの stdin を握ったまま残り、ssh 側が
+`sleep` の時間だけブロックして返ってこない。** これが起きるとタイマーだけ進んで注入が
+始まらず、実験そのものが壊れる。
+
+`--on-active=60` でリハーサルした結果は次のとおり。
+
+- **ssh は 0.042 秒で返った**（`Running timer as unit: ...` を出して即終了）
+- `systemctl list-timers` に `LEFT 59s` で出る
+- `systemctl stop` 後は `could not be found`。トランジェントユニットなので残骸が出ない
+
+本番は `--on-active=1200`（20 分）を注入の**前**に仕込む。注入は 16 分なので、
+解除に成功したら `systemctl stop` でキャンセルする。
+
+### イベントオーバーレイのスキーマを確定させた
+
+`eventOverlays` / `selectedEventOverlays` はダッシュボードモデルに存在するが、
+既定は `null` である。使い捨てダッシュボードを POST してスキーマを観察した
+（チャートと同じく、**この API は未知のフィールドを名前付きで 400 にする**）。
+
+**`eventType` に指定できるのは `detectorEvents` と `eventTimeSeries` の 2 値だけ。**
+`alertEvents` / `detector` は `EventSignal$EventSignalType` の deserialize で落ちる。
+Detector の発火マーカーを出すなら `detectorEvents` で、`eventTimeSeries` は
+自前でイベント API に投げたイベント用である。
+
+as-code 側は Detector の**キーだけ**を書く形にした。`apply.sh` が `.ids.json` から ID を、
+`detectors/<key>.json` から表示名を引いて展開する。**ID を定義に直書きすると
+Detector を作り直したときに追従できない**ためで、チャートの扱いと揃えた。
+
+`selectedEventOverlays` は全件 ON で生成する。**撮影時にトグルを忘れて発火マーカーが
+写っていないのが、この実験で一番痛い失敗**だからである。撮り直しは再注入を意味する。
+
+副作用として `apply.sh` は detectors をダッシュボードより先に流す順序に変えた。
+overlay が Detector の ID を要求するためで、`--only dashboard` の挙動は変わらない。
+
+### 残っている検証
+
+**7/29 の実験レンジでマーカーが所定の時刻に立つかの目視確認**はユーザーのブラウザ作業として
+残っている。URL と既知の発火 6 件の一覧は `docs/runbook-w3-screenshots.md` Step 1 にある。
+マーカーの元データ（`/v2/detector/<id>/events`）が 6 件とも取れることは確認済み。
