@@ -141,6 +141,14 @@ if ONLY in (None, "charts", "dashboard"):
         upsert("chart", key, body, ids)
     save_ids(ids)
 
+if ONLY in (None, "detectors"):
+    defs = read_defs("detectors")
+    if defs:
+        print("detectors:")
+        for key, body in defs:
+            upsert("detector", key, body, ids)
+        save_ids(ids)
+
 if ONLY in (None, "dashboard"):
     print("dashboard:")
     with open(os.path.join(HERE, "dashboard-network-slo.json")) as f:
@@ -160,19 +168,48 @@ if ONLY in (None, "dashboard"):
         }
         for c in layout
     ]
+    # イベントオーバーレイ。定義ファイルには Detector の「キー」だけを書き、
+    # ID は .ids.json から引く（チャートと同じ扱い。ID を定義に直書きしない）。
+    # 表示名は detectors/<key>.json の name をそのまま使う。二重管理を避けるため。
+    overlays = dash.pop("eventOverlays", None)
+    if overlays:
+        det_ids = ids.get("detector", {})
+        missing = [o["detector"] for o in overlays if o["detector"] not in det_ids]
+        if missing and not DRY:
+            print(f"  Detector ID が未解決: {missing}"
+                  f"（先に ./apply.sh --only detectors を流す）", file=sys.stderr)
+            raise SystemExit(1)
+        signals = []
+        for i, o in enumerate(overlays):
+            with open(os.path.join(HERE, "detectors", o["detector"] + ".json")) as f:
+                name = json.load(f)["name"]
+            signals.append({
+                "detectorId": det_ids.get(o["detector"]),
+                "eventSearchText": name,
+                # detectorEvents = Detector の発火。eventTimeSeries は自前で送るイベント用
+                "eventType": "detectorEvents",
+            })
+            o["_signal"] = signals[-1]
+            o["_index"] = i
+        dash["eventOverlays"] = [
+            {
+                "label": o.get("label") or o["detector"],
+                "eventColorIndex": o.get("eventColorIndex", o["_index"]),
+                "eventLine": o.get("eventLine", True),
+                "eventSignal": o["_signal"],
+                "sources": [],
+            }
+            for o in overlays
+        ]
+        # 撮影時にトグルし忘れると発火マーカーが写らないので、既定で全部 ON にする
+        dash["selectedEventOverlays"] = [
+            {"eventSignal": s, "sources": []} for s in signals
+        ]
     gid = ensure_group(ids)
     if gid:
         dash["groupId"] = gid
     upsert("dashboard", "network-slo", dash, ids)
     save_ids(ids)
-
-if ONLY in (None, "detectors"):
-    defs = read_defs("detectors")
-    if defs:
-        print("detectors:")
-        for key, body in defs:
-            upsert("detector", key, body, ids)
-        save_ids(ids)
 
 if not DRY:
     did = ids.get("dashboard", {}).get("network-slo")

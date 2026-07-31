@@ -11,5 +11,11 @@
     { "chart": "throughput", "row": 6, "column": 6, "width": 6, "height": 1 },
     { "chart": "throughput-retransmits", "row": 7, "column": 0, "width": 6, "height": 1 },
     { "chart": "trace-hops", "row": 7, "column": 6, "width": 6, "height": 1 }
+  ],
+  "eventOverlays": [
+    { "detector": "lan-rtt-degraded", "label": "LAN RTT 劣化" },
+    { "detector": "lan-throughput-degraded", "label": "LAN スループット劣化" },
+    { "detector": "wan-rtt-sudden-change", "label": "WAN RTT 逸脱" },
+    { "detector": "packet-loss", "label": "パケットロス継続" }
   ]
 }
