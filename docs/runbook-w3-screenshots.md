@@ -283,7 +283,7 @@ URL に書かなくても 4 本とも表示される。記録には
 | # | 素材 | チャート/画面 | 時刻レンジ | 必須要素 | 使用章 |
 |---|---|---|---|---|---|
 | SS-01 | **キービジュアル** | `charts/slo-baseline-ratio.json`（単体拡大） | 絶対: 注入±30min | 全パスが 1.0 帯 → lan が急騰・wan が連動 → 復旧 / **Detector 発火マーカー** / watermark 1.0・1.5 | 冒頭・6章 |
-| SS-01b | キービジュアルのズーム版 | 同上。**Y軸 max を 3 に切る** | SS-01 と同一レンジ | WAN の 10 倍級とベースライン帯が読める。LAN は振り切れてよい | 冒頭・6章 |
+| SS-01b | キービジュアルのズーム版 | `charts/slo-baseline-ratio-zoom.json`（**Y軸 0〜15 固定**） | SS-01 と同一レンジ | WAN の 12 倍級の全振幅とベースライン帯・watermark が同時に読める。LAN は振り切れてよい | 冒頭・6章 |
 | SS-02 | ゲートの物語・続編 | `charts/twamp-delay-gated.json` | 絶対: 注入±30min | 注入中に **OWD が欠測**する一方 **RTT は連続**して劣化を描く / ceiling 5ms の watermark | 6章 |
 | SS-03 | 注入の生値詳細 | `charts/lan-rtt.json` + `charts/wan-rtt.json`（2枚 or 並置） | 絶対: 注入±30min | 0.9→105ms / 9→115ms の段差 | 6章 |
 | SS-04 | スループット/ロス | `charts/throughput.json` + `charts/packet-loss.json` | 絶対: 注入±30min | 940→241Mbps の谷 / ロス系列の断続性 | 6章 |

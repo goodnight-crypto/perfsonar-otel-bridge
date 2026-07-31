@@ -1,6 +1,6 @@
 {
-  "name": "SLOビュー（ズーム）— 全パスRTT / 直近24hベースライン比・Y軸 0〜3",
-  "description": "隣の SLO ビューと同じ programText で、Y 軸を 0〜3 に切ったもの。v2 chart API に対数軸が無いため、1枚で LAN の100倍級と WAN の10倍級を両立できない（experiments/w3-notes.md Step 11）。全景は隣のチャート、ベースライン帯と WAN の逸脱はこちらで読む。LAN が振り切れるのは想定どおりで、その場合の実値は隣で確認する。撮影時にチャートビルダーで軸をいじらずに済むよう、定義を分けてある（3点リーダー → View fullscreen でそのまま撮れる）",
+  "name": "SLOビュー（ズーム）— 全パスRTT / 直近24hベースライン比・Y軸 0〜15",
+  "description": "隣の SLO ビューと同じ programText で、Y 軸を 0〜15 に固定したもの。v2 chart API に対数軸が無いため、1枚で LAN の100倍級と WAN の10倍級を両立できない（experiments/w3-notes.md Step 11）。上限 15 は WAN の逸脱幅から決めた。2026-07-29 の注入で WAN RTT は 9ms → 115ms（約12.8倍）まで動いており、上限 3 では WAN まで振り切れて「ベースライン帯しか写らない絵」になる。15 なら WAN の全振幅とベースライン帯・watermark が同時に入る。LAN（約117倍）が振り切れるのは想定どおりで、実値は隣の全景で確認する。撮影時にチャートビルダーで軸をいじらずに済むよう、定義を分けてある（3点リーダー → View fullscreen でそのまま撮れる）",
   "programText": "rtt = data('perfsonar.rtt.mean', filter=filter('path.id', '*')).mean(by=['path.id'])\nbase = rtt.median(over='24h')\nratio = (rtt / base).publish(label='ratio')",
   "options": {
     "type": "TimeSeriesChart",
@@ -13,9 +13,9 @@
     "time": { "type": "relative", "range": 86400000, "rangeEnd": 0 },
     "axes": [
       {
-        "label": "RTT / 24h中央値 (倍率・0〜3に固定)",
+        "label": "RTT / 24h中央値 (倍率・0〜15に固定)",
         "min": 0,
-        "max": 3,
+        "max": 15,
         "highWatermark": 1.5,
         "highWatermarkLabel": "+50%",
         "lowWatermark": 1.0,
