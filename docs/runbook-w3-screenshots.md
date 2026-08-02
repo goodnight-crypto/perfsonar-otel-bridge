@@ -149,9 +149,9 @@ overlay が Detector の ID を要求するためで、`--only dashboard` の挙
 ## Step 2.5: 注入手順（LG Gram）【Claude Code】
 
 W2 の手順（`docs/runbook-w2.md` Step 7）は Lima VM の `lima0` 前提だった。**W3 以降は対象が
-LG Gram の `enxa0cec8fe0854` に変わる。** 7/29 との決定的な違いが 2 つある。
+LG Gram の `enxa0cec8e91ea0` に変わる。** 7/29 との決定的な違いが 2 つある。
 
-1. **LAN も WAN も同一 NIC を通る**（`default via 192.168.1.1 dev enxa0cec8fe0854`）。
+1. **LAN も WAN も同一 NIC を通る**（`default via 192.168.1.1 dev enxa0cec8e91ea0`）。
    egress に入れると **LAN 3 本と WAN 全パスが同時に崩れる**。1 枚で全パス劣化が撮れる
 2. **SSH 自体が注入対象 NIC を通る。** 7/29 は `limactl shell` のローカル実行だったので
    この問題が無かった。解除コマンドが届かない事態への保険が要る
@@ -162,7 +162,7 @@ LG Gram の `enxa0cec8fe0854` に変わる。** 7/29 との決定的な違いが
 
 ```bash
 # ノード状態。qdisc が fq_codel であること（noqueue なら異常）
-ssh dev@192.168.1.102 'ip route show default; /sbin/tc qdisc show dev enxa0cec8fe0854'
+ssh dev@192.168.1.102 'ip route show default; /sbin/tc qdisc show dev enxa0cec8e91ea0'
 ssh dev@192.168.1.102 'chronyc tracking | grep -E "System time|Frequency|Skew|Last offset"'
 
 # retry-policy の反映確認。pscheduler-tasks は **展開後の完全な spec** を出すので、
@@ -193,7 +193,7 @@ SSH のライフサイクルから完全に切り離す。
 ```bash
 # 20分後に自動解除する保険
 ssh dev@192.168.1.102 'sudo systemd-run --on-active=1200 --unit=deadman-tc-del \
-  /sbin/tc qdisc del dev enxa0cec8fe0854 root'
+  /sbin/tc qdisc del dev enxa0cec8e91ea0 root'
 ssh dev@192.168.1.102 'systemctl list-timers deadman-tc-del --all --no-pager'
 ```
 
@@ -206,8 +206,8 @@ ssh dev@192.168.1.102 'systemctl list-timers deadman-tc-del --all --no-pager'
 
 ```bash
 ssh dev@192.168.1.102 'date -Is; \
-  sudo /sbin/tc qdisc add dev enxa0cec8fe0854 root netem delay 100ms loss 3%; \
-  /sbin/tc qdisc show dev enxa0cec8fe0854'
+  sudo /sbin/tc qdisc add dev enxa0cec8e91ea0 root netem delay 100ms loss 3%; \
+  /sbin/tc qdisc show dev enxa0cec8e91ea0'
 ```
 
 **開始時刻を秒まで記録する。** 続けて Mac 側から外部の裏取りを取る（7/29 と同じ対照）。
@@ -222,8 +222,8 @@ ping -c 20 1.1.1.1           # Mac の WAN（対照）→ 変化がないこと
 
 ```bash
 ssh dev@192.168.1.102 'date -Is; \
-  sudo /sbin/tc qdisc del dev enxa0cec8fe0854 root; \
-  /sbin/tc qdisc show dev enxa0cec8fe0854'
+  sudo /sbin/tc qdisc del dev enxa0cec8e91ea0 root; \
+  /sbin/tc qdisc show dev enxa0cec8e91ea0'
 ssh dev@192.168.1.102 'sudo systemctl stop deadman-tc-del.timer deadman-tc-del.service'
 ssh dev@192.168.1.102 'systemctl list-timers deadman-tc-del --all --no-pager'
 ssh dev@192.168.1.102 'chronyc tracking | grep -E "System time|Frequency|Skew|Last offset"'

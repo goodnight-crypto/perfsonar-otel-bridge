@@ -1506,3 +1506,90 @@ Exit Criteria も満たせない。**USB 2.0 で実験する場合は閾値を�
 
 ただしその場合、SS-04 の説明は「940 → 241」ではなく「355 → X」になり、
 **GbE アダプタが USB 2.0 で頭打ちになっている話を先に書く必要がある。**
+
+## Step 17: アダプタ交換でフラップは解決。ただし構成が変わり、37 分の欠測が出た
+
+- 日付: 2026-08-02（交換 18:54:38）
+- **リンクフラップは解決した。** 交換から 43 分でキャリア断 0 回、RX/TX errors 0。
+- ただし**交換に伴って 3 つの変化と 1 つの障害**が出た。注入の前に片付ける。
+
+### 交換したもの
+
+| | 旧 | 新 |
+|---|---|---|
+| 製品 | ASIX AX88179A（USB 直挿し） | **Anker USB-C ハブ**経由の Realtek RTL8153A |
+| USB ID | `0b95:1790` | `291a:0817`（ハブ）→ 配下に NIC |
+| ドライバ | `ax88179_178a` | **`r8152`** v1.12.13 / firmware `rtl8153a-4 v2` |
+| インタフェース名 | `enxa0cec8fe0854` | **`enxa0cec8e91ea0`** |
+| MAC | `a0:ce:c8:fe:08:54` | `a0:ce:c8:e9:1e:a0` |
+| USB バス | `2-2` SuperSpeed（ただしフラップ） | `2-2.2` **SuperSpeed 5000M** |
+
+IP は DHCP で **`192.168.1.102/23` を維持**した。デフォルトルートも新 NIC 経由になっている。
+リンクは `1000Mb/s Full`、qdisc は `fq_codel`。
+
+### 変化 1: インタフェース名が変わった
+
+`enxa0cec8fe0854` → `enxa0cec8e91ea0`。**netem の注入対象名が変わる。**
+`docs/runbook-w3-screenshots.md` Step 2.5 と `docs/runbook-w2.md`、CLAUDE.md を更新した。
+
+**インタフェース名は NIC を替えるたびに変わる**（MAC 由来の命名）。
+コマンド実行前に `ip route show default` で確かめる運用にする。
+
+### 変化 2: ハブ経由になり、USB3 帯域を他デバイスと共有する
+
+`lsusb -t` を見ると、Anker ハブの下に NIC（`2-2.2`）と **Mass Storage（`2-2.3`）**が
+ぶら下がっている。**測定中にストレージが動くとネットワークに影響しうる。**
+注入実験の前に外すか、少なくとも動かさないことを確認する。
+
+### 障害: 交換直後から 37 分間、LAN の測定が全滅した
+
+18:55〜19:32 の間、**LAN のタスクだけが全て Failed**（WAN は無傷）。エラーはこれ。
+
+```
+twping: NTP: STA_NANO should be set. Make sure ntpd is running, and your NTP configuration is good.
+twping: bind(): Cannot assign requested address
+twping: Unable to open control connection to 192.168.1.101:862
+```
+
+**原因はクロック同期の喪失だった。** 旧 NIC を抜いた瞬間の chrony ログ。
+
+```
+Aug 02 18:54:53 chronyd[820]: Source 210.173.160.57 offline
+（以下 7 ソースすべて offline）
+Aug 02 18:54:53 chronyd[820]: Can't synchronise: no selectable sources
+```
+
+**twping は NTP 同期を要求する。** インタフェースが消えて chronyd が全ソースを offline に
+落とし、再同期するまでの間、twping が動けなかった。19:32 に自然回復して、
+19:35 の測定から LAN の RTT が戻っている（1.11 / 1.015 ms、正常値）。
+現在の chrony は System time 33ns slow、Skew 0.065ppm、Leap Normal。
+
+**切り分けの経路を記録しておく。** ここは遠回りした。
+
+1. `check-alerts.sh` → 継続中のアラート
+2. Splunk → **LAN 系列だけが欠測、WAN は正常**（ここで NIC 全体の障害ではないと分かる）
+3. Mac 側のブリッジ → PUT を 200 OK で受け続けていた（**パイプラインは無実**）
+4. ARP と ping → 両方向とも正常（**L2/L3 も無実**）
+5. `pscheduler schedule` → LAN タスクが Failed
+6. `pscheduler result` → twping のエラー本文
+7. `journalctl -u chrony` → 全ソース offline
+
+**「ブリッジは 200 OK を返しているのに Splunk にデータが無い」という状態を、
+パイプラインの故障だと早合点しなかったのが効いた。** メトリクスの
+どの系列が欠けているかを先に見たので、2 手目で範囲が絞れた。
+
+### 記事ネタ
+
+- **NIC を交換したら測定が 37 分止まり、原因は NTP だった。**
+  ネットワーク測定ツールが時刻同期に依存していることが、いちばん痛い形で出る例。
+  片道遅延だけでなく **RTT の測定すら止まる**（twping は twamp なので当然だが、
+  「RTT はクロック非依存」という本文の記述と衝突して見えるので書き分けが要る）
+- **障害の切り分けで、まず「どの系列が欠けているか」を見る。**
+  LAN だけ欠測・WAN 正常、という形が分かった時点で、パイプライン全体の故障は消える
+
+### 残っている確認
+
+- **スループットが 940 Mbps に戻るか。** 30 分間隔なので次の run 待ち。
+  USB 2.0 に落ちていた間は 355 Mbps だった。SuperSpeed で繋がっているので戻るはず
+- **`lan-throughput-degraded` の継続中アラート**は、940 Mbps に戻れば自然に解消する
+- **24 時間フラップ 0** を確認してから注入する
