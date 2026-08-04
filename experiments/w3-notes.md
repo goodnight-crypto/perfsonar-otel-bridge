@@ -1724,3 +1724,101 @@ LAN ケーブルかスイッチのポートを替えた可能性が高い。
 `carrier off` は **58 回**（09:14:06〜15:56:29）。**その後 23:00 時点まで約 7 時間ゼロ。**
 物理変更のログが無いのに止まっており、**間欠性・環境要因**という見立てを補強する。
 判定を「24 時間フラップ 0」に置いた判断は妥当だった。
+
+## Step 20: スイッチとケーブルを替えた。同時に RasPi 側で DNS 起因の障害が出ていた
+
+- 日付: 2026-08-04
+- 構成変更: **09:00 頃、LG Gram を RasPi / Mac mini と同じスイッチへ、別の UTP ケーブルで接続**。
+  あわせて**予備の USB NIC（ASIX AX88179）を LG Gram に増設**（ケーブル未接続・リンクダウン）。
+- **フラップは変更後ゼロ**（09:00〜10:15 の 1 時間 15 分）。判定にはまだ足りない。
+- ただし別件で **RasPi の pScheduler が壊れていた。** こちらは修正済み。
+
+### スイッチ・ケーブル変更の効果（暫定）
+
+LG Gram は 08-04 06:46 に再起動している。それ以降の `carrier off` は **4 回**で、
+うち 3 回は起動直後（06:50:11 / 06:50:33 / 06:50:41）、残り 1 回が
+**08:59:40 = ケーブル差し替えそのもの**。**09:00 以降はゼロ。**
+
+スループットも切り替わりが明確に出た。
+
+| 時刻 | 101→102 |
+|---|---|
+| 07:00 | 13.4 Mbps |
+| 07:30 | 94.1 Mbps |
+| 08:00 | **0.63 Mbps** |
+| 08:30 | 94.1 Mbps |
+| 09:00 | 51.1 Mbps |
+| **09:30** | **940.5 Mbps** |
+| **10:00** | **940.7 Mbps** |
+
+**変更前の朝は壊滅的だった。** 94.1 Mbps は 941 のちょうど 1/10 で、
+これまでと同じ 100BASE-TX への再ネゴシエーションの signature である。
+**旧スイッチかそのケーブルが原因だった可能性が高い。** ただし**判定は 24 時間フラップ 0** のまま。
+
+### 増設した予備 NIC は監視 grep を汚す
+
+`enx6c6e072b19b4`（ASIX AX88179、USB `2-1` **SuperSpeed**、ケーブル未接続）。
+リンクダウンのまま `ax88179 - Link status is: 0` を吐き続けており、
+**その行数がすでに 2,395 行**ある。
+
+```
+grep -c "Link status is: 0"          → 2395   ← 予備 NIC のノイズ
+grep -c "enxa0cec8e91ea0: carrier off" →    4   ← 稼働 NIC の実数
+```
+
+**フラップ監視は必ずインタフェース名で絞る。** Step 18 で「ドライバが変わると
+grep が壊れる」と書いたばかりだが、今度は**NIC が増えて壊れた。**
+
+なお `2-1` も SuperSpeed で enumerate した。Step 16 で「SuperSpeed になるのは `2-2` だけ」と
+書いたのは**当時の dmesg 履歴からの観察**であって、`2-1` は試していなかった。
+**USB3 ポートは少なくとも 2 つある。** 「ポートかアダプタか」の切り分けに使える。
+
+### RasPi: PoE 断の再起動で DNS が飛び、pScheduler が壊れていた
+
+**LG Gram 主導の throughput タスク（`102 → 101`）が 07:30 以降 1 度も走っていなかった。**
+`101 → 102`（RasPi 主導）は 30 分おきに走っていたので、片方向だけが欠測していた。
+
+タスクを調べると、psconfig が 1 時間おきに作り直しているのに**毎回 `enabled=False` /
+`runs=0`** で無効化されていた。
+
+RasPi 側を見たら原因が出た。
+
+```
+Checking limits... Failed.
+Limit processor is not initialized: Resolver configuration could not be read or specified no nameservers.
+```
+
+`psconfig-pscheduler-agent` は `activating` のまま、
+`dns.resolver.NoResolverConfiguration` でクラッシュループしていた。
+
+**コンテナ内の `/etc/resolv.conf` に nameserver 行が無かった。** ホスト側には
+`nameserver 192.168.1.1` がある。RasPi は **PoE HAT 給電で、PoE スイッチの接続変更により
+再起動**しており、**Docker がコンテナ再起動時にホストの resolv.conf を写した時点で、
+まだ dhcpcd が nameserver を書いていなかった**と考えられる。Docker は一度生成した
+resolv.conf を上書きしないので、そのまま固定された。
+
+### 修正
+
+```bash
+# 即時（コンテナを作り直さずに済む）
+docker exec perfsonar-testpoint sh -c 'echo nameserver 192.168.1.1 >> /etc/resolv.conf'
+docker exec perfsonar-testpoint systemctl restart psconfig-pscheduler-agent
+```
+
+これで RasPi は `active` / `pScheduler appears to be functioning normally` に戻り、
+LG Gram 側で作り直された throughput タスクも **`enabled=True` / `runs=1`** になった。
+
+恒久対処として `deploy/raspi/run-testpoint.sh` に
+**`-v /etc/resolv.conf:/etc/resolv.conf:ro`** を足した。`--net=host` なので
+ホストの resolver が常に正しく、写しではなく実体を見ることで再発しなくなる。
+
+### 記事ネタ
+
+- **外から見ると健全に見える壊れ方がまた出た。** `docker ps` は `Up`、
+  `pscheduler troubleshoot` も途中まで OK を返す。`Checking limits... Failed.` の 1 行と、
+  `systemctl is-active` が `activating` であることだけが手がかりだった。
+  w3-notes Step 10 の「LG Gram の agent がクラッシュループしていた」と**同じ構図**である
+- **症状は「片方向のスループットだけが欠測」だった。** 原因は反対側のホストの DNS。
+  メッシュ測定は**どちらが lead か**で障害の見え方が変わる
+- **監視の grep は、ドライバが変わっても NIC が増えても壊れる。**
+  Step 18 に続いて 2 回目。**対象を名前で固定していない検証は信用できない**
