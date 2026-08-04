@@ -1953,3 +1953,48 @@ EEE を切って有意に下がれば原因と言える。設定はリンク再�
 戻すのは `eee on`。
 
 **注入実験は引き続き見送る。** 失敗率 36% では SS-04 のベースラインが成立しない。
+
+## Step 23: RasPi の EEE を無効化。24 時間の失敗率で判定する
+
+- 日付: 2026-08-04 23:49:59（設定変更）
+- Step 22 で残った唯一の手がかり（**RasPi だけ Tx LPI が有効**）を潰しにいく。
+
+```bash
+ssh unpeeled@raspi-testpoint.local 'sudo ethtool --set-eee eth0 eee off'
+```
+
+- `EEE status: enabled - inactive` → **`disabled`**
+- **リンクは 23:49:59〜23:50:02 の 3 秒間だけ落ちて再ネゴ**（`Link is Down` → `Link is Up - 1Gbps/Full`）。
+  想定どおり
+- 復帰後は `1000Mb/s Full` / `Link detected: yes`、psconfig エージェントも `active`
+
+### 判定の基準
+
+比較対象は **2026-08-04 09:00〜23:30 の `101 → 102` 方向で 9/25 点が異常（36%）**。
+本番は 30 分間隔なので、**24 時間で片方向 48 点**取れる。
+
+- **有意に下がれば EEE が原因**
+- **変わらなければ EEE は無罪**で、次は失敗時の `tcpdump` / `ss -ti` に進む
+
+判定用のコマンド:
+
+```bash
+# 異常点の数（<500Mbps）を数える。scratchpad の sfq.sh を使う
+WINDOW_HOURS=24 RESOLUTION_MS=1800000 SHOW_POINTS=99 ./sfq.sh <<'Q'
+bps = data('perfsonar.throughput.bps', filter=filter('ps.source','192.168.1.101')).mean(by=['ps.source']).publish(label='bps')
+Q
+```
+
+### 注意: この設定は再起動で戻る
+
+`ethtool --set-eee` は**永続しない。** RasPi は PoE 給電で、**PoE スイッチ側の操作で
+簡単に再起動する**（Step 20 で実際に起きた）。**判定期間中に再起動があったら
+設定が戻っていないか確認する。**
+
+原因と確定したら、`systemd` の oneshot ユニットか `networkd-dispatcher` で永続化し、
+`deploy/raspi/` に入れる。**まだ確定していないので永続化はしない。**
+
+### 並行して継続中の判定
+
+**LG Gram の NIC フラップは 08-04 09:00 以降ゼロ**（23:50 時点で 14 時間 50 分）。
+通算 4 回はすべて 09:00 より前。**24 時間判定は 08-05 09:00 に確定する。**
