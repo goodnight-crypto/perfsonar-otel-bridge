@@ -321,7 +321,7 @@ Detector の Alerts 履歴で足りる。
 
 > **W3 以降の実施は `docs/runbook-w3-screenshots.md` Step 2.5 を参照。**
 > 測定ノードが Lima VM から LG Gram に移り、注入対象が `lima0` から
-> `enxa0cec8e91ea0` に変わった。SSH 自体が注入対象 NIC を通るため、
+> `enxa0cec8fe0854` に変わった。SSH 自体が注入対象 NIC を通るため、
 > デッドマンスイッチの手順も新しくなっている。以下は 2026-07-29 に
 > VM で実施したときの記録として残す。
 
