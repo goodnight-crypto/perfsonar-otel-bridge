@@ -176,11 +176,42 @@ len([x for x in t if not any('retry-policy' in a.get('data',{}) for a in x['arch
 `retry-policy` が無いと注入中の PUT 失敗で測定結果が消える（`docs/schema.md` の
 「archiver の retry-policy」節）。**「タスク 12 / retry-policy 欠落 0」でなければ注入しない。**
 
-**WAN 公開ホスト 2 台のヘルスチェック。** `wan-sinet-tokyo` / `wan-riken-tsukuba` は
-自宅ラボの制御外で、`docs/schema.md` に ICEPP 経由で 80〜90ms の輻輳を観測した記録がある。
-注入前から平常を外れていると、B 案の「平常帯 1.0 → 跳ねる → 復旧」という絵が成立しない。
-**B 案チャートで 6 系列すべてが 0.9〜1.1 に収まっていることを目視で確認**し、
-外れていれば実施を延期する。
+**WAN パスのヘルスチェック。** WAN 側は自宅ラボの制御外である。注入前から平常を外れていると、
+B 案の「平常帯 1.0 → 跳ねる → 復旧」という絵が成立しない。
+
+> **ratio だけを見てはいけない。必ず生値も見る。**
+> B 案の `base` は `median(over='24h')` のローリングベースラインなので、
+> **12 時間級の異常は 24 時間かけてベースラインに取り込まれ、ratio が 1.0 に戻る。**
+> 「劣化したまま平常に見える」状態が作れてしまう。
+> 2026-08-07 に実際に起きた（`wan-cloudflare` / `wan-blog` が 9ms → 118ms のまま
+> ratio 1.00〜1.01。experiments/w3-notes.md Step 28）。
+> **ratio が 0.9〜1.1 に収まっていることは、平常である証明にならない。**
+
+```bash
+# ratio と生値を同時に出す。base と now が乖離していなくても、
+# **now が平常値そのものか**を見る（LAN 0.8ms / WAN 8〜10ms が平常）
+WINDOW_HOURS=1 ./deploy/splunk/query.sh <<'Q'
+rtt  = data('perfsonar.rtt.mean', filter=filter('path.id', '*')).mean(by=['path.id'])
+base = rtt.median(over='24h').publish(label='base_24h_ms')
+now  = rtt.publish(label='now_ms')
+Q
+```
+
+**合格条件**（両方を満たすこと）:
+
+| path.id | `now_ms` の平常値 |
+|---|---|
+| `lan-wired` | 0.7〜1.1 ms |
+| `wan-cloudflare` / `wan-google` / `wan-blog` | 8〜10 ms |
+| `wan-sinet-tokyo` | 8〜9 ms |
+| `wan-riken-tsukuba` | 9〜10 ms |
+
+1. **`now_ms` が上表のレンジに収まっている**（これが主。ratio では検知できない）
+2. B 案チャートで 6 系列が 0.9〜1.1（従。ベースライン汚染があると当てにならない）
+
+外れていれば実施を延期する。**ただし ISP 側など制御外の事象で長期化する場合は、
+該当パスを「別事象で劣化中」と注記した上で残りの系列で撮る**判断もある。
+その場合は SS-01 のキャプションに必ず書く。
 
 ### デッドマンスイッチ（注入より先に仕込む）
 
