@@ -1,0 +1,33 @@
+{
+  "name": "片道遅延（ズーム）— 捨てられた点は方向を持つ",
+  "description": "隣の『片道遅延と品質ゲート』から片道遅延だけを抜き出し、左軸を 0〜1.5ms に固定して棒で描いたもの。本体は RTT が注入で 100ms 級に振れると Y 軸が自動で 0〜100ms になり、0.2〜0.7ms の片道遅延が軸の底に潰れて『欠測したこと』が読めない。折れ線だと欠測が補間で埋まる可能性もあるため、ここでは棒にして『捨てられた点は棒が無い』を確実に描く。主題は欠測の方向性である。netem は egress にしか効かないので、注入方向の片道遅延だけがゲート（0 < delay ≤ 5ms）に捨てられて棒が消え、逆方向は 0.5〜0.7ms のまま並び続ける。同じ区間で RTT は両方向とも 101ms に上がっており方向を区別できない = 『RTT では分からないことが、欠測という形で分かる』（2026-08-08 のリハーサル注入で実測。experiments/w3-notes.md Step 30）。RTT の連続性と clock_error が閾値内に留まっていること（捨てた理由が clock ゲートではない証拠）は本体チャートで読ませる。凡例をこのチャートだけ ps.source にしてあるのは、系列が片道遅延 2 本だけなので送信元 = 方向が一意に決まるためである",
+  "programText": "delay = data('perfsonar.twamp.delay.median', filter=filter('path.id', 'lan-wired')).mean(by=['ps.source', 'ps.destination']).publish(label='delay')",
+  "options": {
+    "type": "TimeSeriesChart",
+    "unitPrefix": "Metric",
+    "colorBy": "Dimension",
+    "defaultPlotType": "ColumnChart",
+    "showEventLines": false,
+    "stacked": false,
+    "onChartLegendOptions": { "showLegend": true, "dimensionInLegend": "ps.source" },
+    "time": { "type": "relative", "range": 86400000, "rangeEnd": 0 },
+    "axes": [
+      {
+        "label": "片道遅延 median (ms・0〜1.5に固定)",
+        "min": 0,
+        "max": 1.5
+      },
+      { "label": "" }
+    ],
+    "legendOptions": {
+      "fields": [
+        { "property": "ps.source", "enabled": true },
+        { "property": "ps.destination", "enabled": true },
+        { "property": "sf_originatingMetric", "enabled": true }
+      ]
+    },
+    "publishLabelOptions": [
+      { "label": "delay", "displayName": "片道遅延 median（ゲート通過分のみ）", "plotType": "ColumnChart", "valueUnit": "Millisecond", "yAxis": 0 }
+    ]
+  }
+}

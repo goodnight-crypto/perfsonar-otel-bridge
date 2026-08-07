@@ -7,11 +7,12 @@
     { "chart": "lan-rtt", "row": 4, "column": 0, "width": 6, "height": 1 },
     { "chart": "wan-rtt", "row": 4, "column": 6, "width": 6, "height": 1 },
     { "chart": "twamp-delay-gated", "row": 5, "column": 0, "width": 12, "height": 2 },
-    { "chart": "wan-owd", "row": 7, "column": 0, "width": 12, "height": 2 },
-    { "chart": "packet-loss", "row": 9, "column": 0, "width": 6, "height": 1 },
-    { "chart": "throughput", "row": 9, "column": 6, "width": 6, "height": 1 },
-    { "chart": "throughput-retransmits", "row": 10, "column": 0, "width": 6, "height": 1 },
-    { "chart": "trace-hops", "row": 10, "column": 6, "width": 6, "height": 1 }
+    { "chart": "twamp-delay-gated-zoom", "row": 7, "column": 0, "width": 12, "height": 2 },
+    { "chart": "wan-owd", "row": 9, "column": 0, "width": 12, "height": 2 },
+    { "chart": "packet-loss", "row": 11, "column": 0, "width": 12, "height": 1 },
+    { "chart": "throughput", "row": 12, "column": 0, "width": 6, "height": 1 },
+    { "chart": "throughput-retransmits", "row": 12, "column": 6, "width": 6, "height": 1 },
+    { "chart": "trace-hops", "row": 13, "column": 0, "width": 12, "height": 1 }
   ],
   "eventOverlays": [
     { "detector": "lan-rtt-degraded", "label": "LAN RTT 劣化" },

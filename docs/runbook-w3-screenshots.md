@@ -30,7 +30,7 @@
 
 | ショット | 手順 |
 |---|---|
-| チャート単体<br>（SS-01・01b・02・03・04・08） | チャート右上の 3 点リーダー → **`Download chart as image`** |
+| チャート単体<br>（SS-01・01b・02・02b・03・04・08） | チャート右上の 3 点リーダー → **`Download chart as image`** |
 | ダッシュボード全景<br>（SS-06・SS-09） | ダッシュボード右上の 3 点リーダー → **`Export`** → ファイルフォーマットに **image** を指定 |
 | AI Assistant（SS-07） | ダッシュボードを `View fullscreen` にして右ペインに開き、`Cmd+Shift+4` |
 | Alerts（SS-05） | **fullscreen が無い。** `Cmd+Shift+4` でウィンドウ単位に撮る |
@@ -64,8 +64,13 @@ WAN RTT や、`delay` / `rtt` / `clock_error` が重なる Chart 6 は、これ�
 |---|---|---|
 | SLOビュー / ズーム / WAN RTT / パケットロス / ホップ数 | `path.id` | |
 | Chart 6 / WAN 片道遅延 | `sf_streamLabel` | `delay` / `rtt` / `reverse` / `clock_error` |
+| **片道遅延（ズーム）** | **`ps.source`** | **このチャートだけ次元が違う。** 主題が「どちら向きの片道遅延が欠測したか」なので、`sf_streamLabel` では方向を区別できない。**系列を片道遅延 2 本だけに絞ってあるので、送信元 = 方向が一意に決まる** |
 | LAN RTT | `sf_streamLabel` | `mean` / `max` |
 | スループット / TCP 再送 | `ps.source` | |
+
+**パケットロスは w6 では凡例が `See all` に畳まれる。** 系列が 11 本あり
+（`path.id` × 方向 × `ps.test.type`）、w6 では 6 本しか出なかった（2026-08-08 のリハーサル）。
+**w12 に変更済み。** 実測で 1 項目あたり約 90px なので、11 本 × 90 = 990px < w12 の幅で収まる。
 
 **同じラベルが 2 つ並ぶのは正常である。** Chart 6 は往復 2 方向、WAN 片道遅延は
 宛先 2 拠点あり、`sf_streamLabel` はそこを区別しない。色で分かれるので、
@@ -142,7 +147,7 @@ overlay が Detector の ID を要求するためで、`--only dashboard` の挙
 | T+5〜10min | Detector 発火を Alerts 画面で確認 → **発火中に SS-05, SS-06 を撮影** |
 | T+10min | AI Assistant にアラート調査をさせる → **SS-07 を撮影**（W3 積み残しの回収） |
 | T+16min | 注入解除。**解除時刻を秒まで記録** |
-| T+30min〜 | 全系列の復旧確認後、絶対時刻レンジで SS-01〜04, 08 を撮影 |
+| T+30min〜 | 全系列の復旧確認後、絶対時刻レンジで SS-01〜04（02b 含む）, 08 を撮影 |
 
 注入開始/解除時刻は `experiments/w3-notes.md` に記録し、図版キャプションの一次情報にする。
 
@@ -316,6 +321,7 @@ URL に書かなくても 4 本とも表示される。記録には
 | SS-01 | **キービジュアル** | `charts/slo-baseline-ratio.json`（単体拡大） | 絶対: 注入±30min | 全パスが 1.0 帯 → lan が急騰・wan が連動 → 復旧 / **Detector 発火マーカー** / watermark 1.0・1.5 | 冒頭・6章 |
 | SS-01b | キービジュアルのズーム版 | `charts/slo-baseline-ratio-zoom.json`（**Y軸 0〜15 固定**） | SS-01 と同一レンジ | WAN の 12 倍級の全振幅とベースライン帯・watermark が同時に読める。LAN は振り切れてよい | 冒頭・6章 |
 | SS-02 | ゲートの物語・続編 | `charts/twamp-delay-gated.json` | 絶対: 注入±30min | 注入中に **OWD が欠測**する一方 **RTT は連続**して劣化を描く / ceiling 5ms の watermark | 6章 |
+| SS-02b | **捨てられた点は方向を持つ** | `charts/twamp-delay-gated-zoom.json`（**片道遅延のみ・棒・Y軸 0〜1.5ms 固定**） | SS-02 と同一レンジ | **注入方向の棒だけが消え、逆方向は 0.5〜0.7ms で並び続ける。** RTT の連続性と clock_error は SS-02 側で読ませる（重複させない） | 6章 |
 | SS-03 | 注入の生値詳細 | `charts/lan-rtt.json` + `charts/wan-rtt.json`（2枚 or 並置） | 絶対: 注入±30min | 0.9→105ms / 9→115ms の段差 | 6章 |
 | SS-04 | スループット/ロス | `charts/throughput.json` + `charts/packet-loss.json` | 絶対: 注入±30min | 940→241Mbps の谷 / ロス系列の断続性 | 6章 |
 | SS-05a | Detector 発火（一覧） | Alerts の Active alerts | **発火中にライブ撮影（撮り逃し不可）** | severity のカウントと Rule name の行 | 5-6章 |
@@ -399,7 +405,7 @@ Phase 3 の検証ショットで、**watermark 1.0 と 1.5 が軸の底で重な
 
 ## Exit Criteria
 
-- [ ] SS-01〜09 が raw で揃っている（欠番がある場合は理由を w3-notes.md に記録）
+- [ ] SS-01〜09（01b / 02b を含む）が raw で揃っている（欠番がある場合は理由を w3-notes.md に記録）
 - [ ] 注入開始/解除の秒単位時刻と、各撮影 URL が w3-notes.md に記録されている
 - [ ] AI Assistant の調査記録（SS-07 + テキスト転記）が experiments/ に保存されている
 - [ ] INDEX.md が生成され、記事構成案の章と図版の対応が確定している
