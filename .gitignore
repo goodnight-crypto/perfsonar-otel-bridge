@@ -11,3 +11,8 @@ __pycache__/
 *.pyc
 .DS_Store
 .venv/
+
+# ローカル専用（public 化にあたり履歴から除去済み。2026-08-08）
+# CLAUDE.md は Claude Code が作業ディレクトリから読むので、消さずに追跡だけ外す
+CLAUDE.md
+docs/review/
