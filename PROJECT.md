@@ -193,11 +193,27 @@ Zenn 記事投稿コンテスト「OpenTelemetryの知見を、記事にしよ�
 ## 公開前チェックリスト（public 化時）
 
 実施日: 2026-07-30（`6b9577e` 時点、41コミット）
+**再実施: 2026-08-08（`a678cc2` 時点、94コミット）**
+
+> **`-v` を付けてはいけない。** `--redact` は**全ての検出に効くわけではない**。
+> 2026-08-08 に `gitleaks dir --redact -v .` を実行したところ、`.env` の 2 件のうち
+> **1 件は `REDACTED` になったが、もう 1 件は実値の末尾 19/22 文字が平文で出力された。**
+> 22 文字中 19 文字なので実質的な露出である。**露出したのは `SPLUNK_ACCESS_TOKEN`（INGEST トークン）で、
+> 2026-08-08 に再発行済み。** 履歴には入っていないため public 化の可否には影響しない。
+> `-v` 無しなら `leaks found: N` の件数だけが出る。**件数で十分**である。
 
 ```bash
-gitleaks git --redact -v .    # 全履歴
-gitleaks dir --redact -v .    # 作業ツリー（.env の2件だけ出るのが正常）
+gitleaks git --redact .    # 全履歴（0 件が正常）
+gitleaks dir  --redact .   # 作業ツリー（.env の2件だけ出るのが正常）
 ```
+
+**ルールに頼らない直接検証も併せて行う。** `.gitleaks.toml` のカスタムルールが
+将来のトークン書式変更で外れる可能性があるため、**`.env` の実値そのもの**を
+全履歴の diff（`git log -S`）と全コミットのツリー（`git grep`）から検索し、
+**件数だけを出力する**スクリプトで確認する（値を標準出力に出さないこと）。
+
+2026-08-08 の結果: 全 94 コミット、`SPLUNK_ACCESS_TOKEN` / `SPLUNK_API_TOKEN` とも
+diff 0 件 / tree 0 件。gitleaks 全履歴スキャンも 89 コミットで 0 件。
 
 - [x] `git log` 全履歴に対する secrets scan（gitleaks 8.30.1）
       - **0件。** 既定ルールは Splunk トークン（22文字）を拾わないため `.gitleaks.toml` に
