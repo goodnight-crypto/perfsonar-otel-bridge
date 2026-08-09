@@ -2,93 +2,113 @@
 
 `docs/runbook-w3-screenshots.md` Step 4 のショットリストと実ファイルの突合表。
 
+**2026-08-10 に記事を公開して確定した。** 以下は最終状態の記録である。
+
 ## 状態
 
 | ディレクトリ | 内容 | 状態 |
 |---|---|---|
-| `provisional/` | **2026-08-08 05:22:20〜05:38:26 のリハーサル注入**で取得した仮画像 | 全 9 種そろい。記事の構成・キャプション確定用 |
-| `raw/` | 本番注入（**2026-08-09 04:00 以降**予定）の最終素材 | 未取得 |
-| `annotated/` | 注釈入り（矢印・囲み・日本語ラベル） | 未着手 |
-| `rehearsal/` | 2026-07-31〜08-01 の撮影手順リハーサル。**実験データではない** | 参考のみ |
+| `provisional/` | **リハーサル注入（08-08 05:22:20〜05:38:26）と本番注入（08-09 07:29:44〜07:45:38）**の両方 | **確定**。本番分は `-2` / `-3` / 時刻 4 桁で区別 |
+| `raw/` | — | **未使用のまま終わった。** provisional で確定したため |
+| `annotated/` | 注釈入り | **未着手のまま終わった。** 注釈なしで公開に至ったため不要 |
+| `rehearsal/` | 2026-07-31〜08-01 の撮影手順リハーサル。実験データではない | 参考のみ |
 | `verify/` | ダッシュボード適用の検証ショット | 参考のみ |
 
-**provisional は差し替え前提である。** `wan-cloudflare` / `wan-blog` の 24h ベースラインが
-117ms のまま汚染されており（`experiments/w3-notes.md` Step 29）、SS-01 系でこの 2 系列は
-平常帯 0.076 に沈んで動かない。本番では 6 系列すべてが 1.0 帯から跳ねる。
+**本番注入のレンジは 07:00〜08:16 JST**（注入 ±30分）。リハーサルは 04:52〜05:52 で、
+runbook の指定（開始30分前〜解除30分後）から終端が外れていた。本番で修正した。
 
-## 突合表
+## 記事に採用した図版（8 枚）
 
-撮影レンジはいずれも **04:52〜05:52**（注入開始 ±30分）。
-runbook の指定は「開始の30分前〜**解除の30分後**」= 04:52〜06:08 なので、
-**本番ではレンジを修正する**（w3-notes Step 30 の「直すこと」#1）。
+公開先: `/Users/dev/src/blog/zenn/images/home-network-slo/`
 
-| # | ファイル | 章 | キャプション案 | 状態 |
-|---|---|---|---|---|
-| SS-01 | `SS-01-slo-baseline-ratio.png` | 冒頭・6章 | 全パスRTTを自身の直近24h中央値で正規化。05:22 の netem 注入で `lan-wired` が **126倍**に跳ね上がる。Y軸自動 | **要差し替え**。`wan-cloudflare`/`wan-blog` が汚染で底に沈む |
-| SS-01b | `SS-01b-slo-baseline-ratio-zoom.png` | 冒頭・6章 | 同一レンジのY軸0〜15固定版。WAN 5本の11〜13倍が読める。LAN は振り切れ | **要差し替え**（同上） |
-| SS-02 | `SS-02-twamp-delay-gated.png` | 6章 | 注入中に**片道遅延が欠測**する一方 RTT は連続。欠測は「壊れた」ではなく品質ゲートが「捨てた」 | 可（Y軸自動。RTT の連続性を読ませる役） |
-| SS-02b | `SS-02b-twamp-delay-gated-zoom-2.png` | 6章 | **捨てられた点は方向を持つ。** 注入方向（緑）の棒が 05:30 / 05:35 / 05:40 の3本だけ消え、逆方向（グレー）は 0.5〜0.7ms で並び続ける | **良好**（棒に作り直した版） |
-| SS-03 | `SS-03-lan-rtt.png` | 6章 | LAN RTT が 0.81 → 101.3 ms | 可 |
-| SS-03 | `SS-03-wan-rtt.png` | 6章 | WAN 5本が 8〜10 → 109〜110 ms。同一 NIC を通るため LAN と同時に崩れる | 可 |
-| SS-04 | `SS-04-throughput.png` | 6章 | **方向非対称**: 注入方向 941→**1.30 Mbps**、逆方向は **940.5 Mbps で無傷**（ACK しか netem を通らない） | **要改善**。30分間隔で窓に1点しか入らず谷にならない（#4） |
-| SS-04 | `SS-04-packet-loss-2.png` | 6章 | ロス系列の断続性。`packet_loss_sustained` が 05:33 / 05:37 に発火 | 可。**w12 化後の再撮影版。凡例 11 項目が `See all` なしで全部出ることを確認済み** |
-
-### SS-10 系 — Cloudflare 事象（記事 H2-3 用・本番注入とは無関係）
-
-2026-08-06 22:30 〜 08-08 02:50 の実障害イベント。**注入実験ではないので差し替え不要。**
-撮影レンジは終端を 08/08 05:00 にしてある（06:00 にするとリハーサル注入が右端に写り込む）。
-
-| ファイル | レンジ | 役割 |
+| 記事のファイル名 | 由来 | 内容 |
 |---|---|---|
-| `SS-10a-cloudflare-raw.png` | 08/06 20:00〜08/08 05:00 | **生値**。9→118ms のプラトー。**上の線は wan-cloudflare(118.5ms) と wan-blog(116.5ms) の 2 本が重なっている**ことをキャプションに明記する |
-| `SS-10b-cloudflare-ratio.png` | 図A と同一 | **1つ目の嘘**。12.9倍 → 8/07 10:00頃に 1.0 へ収束（ベースラインが追いついただけ） |
-| `SS-10c-cloudflare-ratio-narrow.png` | 08/07 22:00〜08/08 05:00・5分解像度 | **2つ目の嘘**。02:50 に 1.0 → 0.08 の崖。`lan-wired` の 0.65〜2.55 のゆらぎが同じ図に入っており、0.08 がその外だと分かる |
+| `injection-ratio.png` | `SS-01b-slo-baseline-ratio-zoom-2.png` | SLO ビュー（Y軸0〜15固定）。注入区間で 6 系列すべてが跳ねる |
+| `owd-gated.png` | `SS-02b-twamp-delay-gated-zoom-3.png` | 片道遅延（棒・0〜1.5ms固定）。**注入方向の棒だけが 3 本消える** |
+| `alerts.png` | `SS-05a-active-alerts-0748.png` | Active alerts。LAN RTT 劣化 2 件 + WAN RTT 逸脱 1 件 |
+| `raw-wide.png` | `SS-10a-cloudflare-raw.png` | Cloudflare 事象の生値。118ms のプラトーが 28 時間 |
+| `ratio-wide.png` | `SS-10b-cloudflare-ratio.png` | 同レンジの比率。12.9倍 → 1.0 へ収束 |
+| `ratio-narrow.png` | `SS-10c-cloudflare-ratio-narrow.png` | 復旧時に 1.0 → 0.076 へ落ちる崖 |
+| `three-metrics.png` | **生成（ChatGPT）** | 3 指標の対比。`docs/article/infographic-1-three-metrics.md` |
+| `window-breaks.png` | **生成（ChatGPT）** | 移動窓の 2 方向の壊れ方。`docs/article/infographic-2-window-breaks.md` |
 
-**図A と図B は同一レンジで撮ること。** 軸がずれると「生値は118msのままなのに ratio は1.0」の対比が成立しない。
+**`alerts.png` に 07:48 を選んだ理由**: 4 Detector は 23 分かけて階段状に発火したため、
+**4 種類が同時に並ぶ瞬間が存在しない**。07:48 は LAN と WAN が同時に出ており、
+severity も 2 段階（Major / Minor）写る唯一のショットだった。
 
-**「8.8.8.8 は無傷」は図A では読めない**（w6 で縦に潰れ、8〜10ms の4系列が底で1本の帯になる）。
-切り分けの証拠は traceroute のコードブロックを使う（`experiments/w3-notes.md` Step 28 の追記）。
+## 本番注入の全ショット（08-09）
 
-**ファイル名の `narrow` は「狭いレンジ」の意味。** ズーム版チャート
-（`slo-baseline-ratio-zoom`、Y軸0〜15固定）ではない。1 度取り違えて撮り直している。
-Y軸固定のズーム版では 1.0 と 0.076 が両方とも軸の底に潰れて 2 つ目の嘘が読めない。
+撮影レンジは断りのない限り **07:00〜08:16 JST**。
 
-### 失敗版を「before」として保存してある
+| # | ファイル | 記事採用 | 備考 |
+|---|---|---|---|
+| SS-01 | `SS-01-slo-baseline-ratio-2.png` | — | Y軸自動。LAN が振り切れるため 01b を採用した |
+| SS-01b | `SS-01b-slo-baseline-ratio-zoom-2.png` | **採用** | `+50%` と `ベースライン(1.0)` の watermark が左端で重なる（軽微） |
+| SS-02 | `SS-02-twamp-delay-gated-2.png` | — | RTT の連続性と clock_error はこちらで読める |
+| SS-02b | `SS-02b-twamp-delay-gated-zoom-3.png` | **採用** | 主題どおり撮れた |
+| SS-03 | `SS-03-lan-rtt-2.png` / `SS-03-wan-rtt-2.png` | — | 数値は本文の表に採用 |
+| SS-04 | `SS-04-throughput-2.png` / `SS-04-packet-loss-3.png` | — | throughput は**方向差が写っていない**（下記） |
+| SS-05a | `SS-05a-active-alerts-0741.png` | — | `packet_loss_sustained` × 3（Major 3） |
+| SS-05a | `SS-05a-active-alerts-0743.png` | — | 同上（2 件に減少） |
+| SS-05a | `SS-05a-active-alerts-0746.png` | — | 解除直後 |
+| SS-05a | **`SS-05a-active-alerts-0748.png`** | **採用** | `lan_rtt_degraded` × 2 + `wan_rtt_sudden_change` × 1 |
+| SS-05a | `SS-05a-active-alerts-0750.png` | — | |
+| SS-05a | `SS-05a-active-alerts-0808.png` | — | `lan_throughput_degraded` のみ（Warning 1） |
+| SS-05b | `SS-05b-alerts-detail-0751.png` | — | アラート詳細 |
+| SS-06 | `SS-06-dashboard-2.png` | — | 発火中の全景（相対 1h） |
+| SS-07 | `SS-07-ai-assistant-0746.png` + `-2.png` + `.md` | — | **回答全文の `.md` が記事の材料**。画像は未使用 |
+| SS-08 | `SS-08-wan-owd-2.png` | — | 平常時の WAN 片道遅延 |
+
+### SS-04 throughput は方向差を写せていない
+
+**記事のスループット節は、この図ではなく 40 分の追試（15:09:34〜15:50:02）の数値を使った。**
+
+iperf3 は約 30 分間隔で往路と復路が約 15 分ずれて交互に走るため、
+**16 分の注入では両方向を同時に捉えられない。** 本番注入で区間内に入ったのは
+逆方向の 1 点（229 Mbps）だけだった。経緯は `experiments/w3-notes.md` Step 35。
+
+追試の実測: 注入方向 941.4 → **1.10 Mbps**（860倍低下）／
+逆方向 940.9 → **230.0 Mbps**（4.1倍低下）／ 方向差 **210倍**。
+
+## 撮影 URL（本番）
+
+```
+https://app.jp0.signalfx.com/#/dashboard/HOWdHgXCEAI
+  ?groupId=HOWc2kfCIAA
+  &startTimeUTC=1786226400000
+  &endTimeUTC=1786230960000
+```
+
+- レンジ: 2026-08-09 07:00:00〜08:16:00 JST
+- **`selectedEventOverlays` は意図的に落としてある。** `overlayId` はダッシュボードを
+  PUT するたびにサーバが振り直すため再現性がない。`apply.sh` が全件 ON で生成するので
+  URL に書かなくても 4 本のマーカーは出る
+
+参考: リハーサルのレンジ 04:52〜05:52 = `1786132320000` 〜 `1786135920000`
+
+## リハーサル分（08-08）— 差し替え済み
+
+日付サフィックスのないファイル（`SS-01-slo-baseline-ratio.png` など）がリハーサル分。
+**`wan-cloudflare` / `wan-blog` の 24h ベースラインが 117ms のまま汚染されており、
+SS-01 系でこの 2 系列が 0.076 に沈んで動かない。** 本番注入はこれを解消するために実施した。
+
+経緯は `experiments/w3-notes.md` Step 29〜30。
+
+## 失敗版を「before」として保存してある
 
 チャート設計の失敗そのものが記事の材料になるため、**差し替え前の版を消していない。**
 
 | ファイル | 何が読めなかったか | 対になる after |
 |---|---|---|
-| `SS-02b-twamp-delay-gated-zoom.png` | 6系列・折れ線・凡例が `ps.source` のため、**どの線が片道遅延で どれが RTT / clock_error か区別できない。** `dimensionInLegend` は1次元しか出せず「メトリック × 方向」を同時に表せない | `SS-02b-twamp-delay-gated-zoom-2.png` |
-| `SS-04-packet-loss.png` | w6 では凡例11項目のうち6項目で **`See all` に畳まれる** | `SS-04-packet-loss-2.png` |
+| `SS-02b-twamp-delay-gated-zoom.png` | 6系列・折れ線・凡例が `ps.source` のため、**どの線が片道遅延で どれが RTT / clock_error か区別できない。** `dimensionInLegend` は1次元しか出せず「メトリック × 方向」を同時に表せない | `SS-02b-twamp-delay-gated-zoom-2.png` → 本番 `-3` |
+| `SS-04-packet-loss.png` | w6 では凡例11項目のうち6項目で **`See all` に畳まれる** | `SS-04-packet-loss-2.png` → 本番 `-3` |
 
 どちらも「**1枚のチャートに主張を2つ載せると読めなくなる**」の実例。
-経緯は `experiments/w3-notes.md` Step 30。
-| SS-05a | `SS-05a-active-alerts.png` | 5-6章 | 発火中の Active alerts。**Critical 0 / Major 2 / Minor 3 / Warning 1**。4 Detector すべてが発火 | **良好**（発火中しか撮れないショット。確保済み） |
-| SS-05b | `SS-05b-alerts-detail.png` | 5-6章 | アラート詳細。検知時刻 JST・閾値・Alert ID・Data links | 可 |
-| SS-06 | `SS-06-dashboard.png` | 6章 | 発火中のダッシュボード全景。絶対レンジとイベントオーバーレイ4本がヘッダに保持されている | 可（Export の罠は回避） |
-| SS-07 | `SS-07-ai-assistant.png` + `.md` | 6章 | AI Assistant の調査。**LAN を「安定」と誤読し、切り分け方向を逆に案内し、存在しないホスト名を出した** | 可（**誤りそのものが素材**） |
-| SS-08 | `SS-08-wan-owd.png` | 5章 or 7章 | 平常時の WAN 片道遅延。往路/復路/RTT の3系列が乖離 | **要差し替え**。24h窓に 117ms プラトーが残る。**08-09 02:50 以降**でないと平常が撮れない |
-| SS-09 | `SS-09-dashboard.png` | 5章 | 平常時のダッシュボード全景（v2 レイアウト、SLOビューが先頭） | **要差し替え**（同上） |
 
-## 注釈 TODO（`annotated/` 行き）
+## 注釈（`annotated/`）は作らなかった
 
-| ファイル | 入れる注釈 |
-|---|---|
-| SS-01 | 注入開始 05:22:20 / 解除 05:38:26 の縦線と時刻ラベル。「126倍」の引き出し線 |
-| SS-01b | 「LAN は上に振り切れ（実値は SS-01）」の注記。**本番では**「6系列すべてが1.0帯から跳ねる」ことを示す囲み |
-| SS-02 | 「RTT は連続している」ことを指す矢印。欠測区間の位置に注記 |
-| SS-02b | **欠測区間（05:30/05:35/05:40）を囲む。** 凡例が裸のIPなので、**「グレー = RasPi → LG Gram（注入なし）」「緑 = LG Gram → RasPi（注入方向）」の日本語ラベルを必ず添える**（runbook Step 5 の「IP裸の系列名が主役にならない」に抵触するため、注釈で解消する） |
-| SS-04 throughput | 「1.30 Mbps」と「940.5 Mbps」の値ラベル。「netem は egress にしか効かない」の注記 |
-| SS-05a | `packet_loss_sustained` の行を囲む（7/29 は未発火だったもの） |
-| SS-06 | `wan-cloudflare` / `wan-blog` が**発火していない**ことを指す矢印 |
+当初は矢印・囲み・日本語ラベルを入れる予定だったが、**注釈なしで公開に至った。**
 
-## 撮影 URL
-
-**未記録。** runbook Step 3 の指定は
-`?groupId=...&configId=...&startTimeUTC=...&endTimeUTC=...` の形で記録すること
-（`selectedEventOverlays` は PUT のたびに振り直されるので落とす）。
-**本番では必ず記録する**（Exit Criteria）。
-
-参考: レンジのエポックミリ秒
-- リハーサル 04:52〜05:52 = `1786132320000` 〜 `1786135920000`
+理由は 2 つ。チャート定義側で `onChartLegendOptions` を使って凡例をチャート内に描かせたため
+系列の区別が図の中で完結したこと、そして**インフォグラフィック 2 枚を別途生成したため、
+説明が必要な部分はそちらが担ったこと**である。
