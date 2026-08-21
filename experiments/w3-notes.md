@@ -3208,3 +3208,68 @@ Phase 4 の当初の目的は**図版の撮り直しだけ**だった（CLAUDE.m
   `raw/` に `ss-<連番>-<略称>-<内容>.png`。**公開を優先して後回しにした**
 - 40 分の追試により 24h ベースラインに 40 分ぶんの異常データが入っている（2.8%）。
   08-10 中に窓から抜ける
+
+---
+
+## Step 37: 落雷停電による 8 日間の欠測（2026-08-21 検知・復旧）
+
+Splunk ダッシュボードにデータが来ていないとの指摘で調査。**8/13 13:30 JST 以降、8 日間の欠測**だった。
+
+### 原因
+
+落雷による停電で Mac mini が電源断。**電源復旧後も自動起動しない設定だった**ため、
+bridge / collector が停止したまま 8 日が経過した。測定側（LG Gram）は一度も止まっていない。
+
+| 時刻 (JST) | 出来事 |
+|---|---|
+| 08-13 13:28:18 | 落雷・停電。`enxa0cec8fe0854: Lost carrier`、Mac mini 電源断 |
+| 08-13 13:28:40 | 22 秒でリンク復旧（LG Gram はバッテリーで生存。`up 17 days`） |
+| 08-13 13:30 | **Splunk の最終データ** |
+| 08-13 13:31:26 | archiver が `No route to host` を出し始める |
+| 08-13 23:04:41 | リンク断 16 秒（切り分けでスイッチングハブを再起動した影響） |
+| 08-13 23:17:10 | Mac mini を手動で電源投入。**Docker Desktop は自動起動せず** |
+| 08-13 23:17:24 | archiver のエラーが `Connection refused` に変わる |
+| 08-21 13:46:56 | Docker Desktop 起動。restart policy で bridge / collector が自動復帰 |
+
+### 知見: archiver のエラー種別は「相手の壊れ方」を示す
+
+切り分けの途中で **`Connection refused` だけを grep して障害開始を 23:17 と誤読した**。
+実際の開始は 13:31 で、それまでは `No route to host` が出ていた。
+
+| エラー | 意味 |
+|---|---|
+| `No route to host`（after 3000ms 前後） | **ホストが落ちている**。ARP が解決できない |
+| `Connection refused`（after 0 ms） | **ホストは生きているがポートが閉じている**。TCP RST が即返る |
+
+この 2 つを区別せずに数えると、「9 時間 45 分だけ Splunk 側で落ちていた」という
+**存在しない第二の障害を作り出す**。実際 collector → Splunk のトークン失効を疑ってしまった。
+障害切り分けでは **`Failed to connect` の後半（理由句）と経過 ms まで見る**こと。
+
+### 知見: 停電は「測定系の外」から来る
+
+Phase 4 までの障害はすべて測定パイプラインの内側（NIC・クロック・トークン・窓幅）だった。
+今回は電源という**インフラ層**。ノート PC（LG Gram）はバッテリーで生き延び、
+デスクトップ（Mac mini）だけが落ちた。**構成上どのノードが電源障害に弱いかは、
+測定の設計とは無関係に決まる**。
+
+### 対処
+
+1. `AutoStart: false` → `true`（`~/Library/Group Containers/group.com.docker/settings-store.json`）。
+   Docker Desktop 起動前に書き換えること。起動中は上書きされうる。バックアップは `.bak.<timestamp>` に取った
+2. `sudo pmset -a autorestart 1`（停電復旧後に Mac mini が自動起動）。
+   sudo パスワードが要るため**ユーザーが実行**し、`pmset -g` で `autorestart 1` を確認済み（08-21）
+
+### 復旧後の確認
+
+- `docker logs psotel-collector | grep -c "Dropping data"` → 0
+- bridge に `PUT /archive 200 OK`
+- archiver のエラーは 13:46:56 を最後に停止
+- Splunk に測定時刻 13:24 / 13:29 の点が到達（リトライ中だった結果が復旧と同時に流入）
+- **トークンは有効だった**（`.env` の最終更新は 08-08 09:20、ローテート不要）
+
+### 残った課題
+
+- **8 日間気づけなかった。** CLAUDE.md の知見どおり `base_24h_ms` は測定が止まっても値を返す。
+  生値ベースの死活監視（Splunk 側 Detector か Mac の cron で `query.sh`）が要る
+- 欠測 8 日ぶんは `Gave up archiving` 済みで**復旧しても戻らない**。
+  記事から参照しているダッシュボードにはこの期間の空白が残る
